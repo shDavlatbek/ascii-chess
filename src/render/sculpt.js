@@ -14,7 +14,7 @@ import { GLYPHS } from '../core/palette.js';
 import { TAU, clamp, hash2 } from '../core/util.js';
 
 export const TILT = 0.44;          // camera pitch (rad): we look slightly down
-export const ASPECT = 1.42;        // fine cell height / width
+export const ASPECT = 1.42;        // nominal fine cell height / width (sprites snap it to whole px)
 export const SX = 3, SY = 4;       // sub-samples per cell (≈ square sub-pixels)
 export const STEP = TAU / 60;      // yaw between pre-rendered frames (6°)
 
@@ -185,12 +185,12 @@ function buildPawn() {
   // head
   arc(p, 0, 0.455, 0.108, -52, 90, 14);
   lathe(c, p, { tex: grain(3, 5) });
-  return finish(c, { h: 0.565, order: 3 });
+  return finish(c, { h: 0.565, order: 3, ys: YS.p });
 }
 
 function buildRook() {
   const c = new Cloud(12);
-  const N = 6, DUTY = 0.56;                       // merlons
+  const N = 4, DUTY = 0.52;                       // merlons
   const yNotch = 0.545, yTop = 0.645, rOut = 0.168, rIn = 0.098;
   const merlon = (th) => (((th / TAU) * N % 1) + 1) % 1 < DUTY;
   const g = grain(N, 7, 0.26);
@@ -217,7 +217,7 @@ function buildRook() {
       }
     }
   }
-  return finish(c, { h: yTop, order: N });
+  return finish(c, { h: yTop, order: N, ys: YS.r });
 }
 
 function buildBishop() {
@@ -233,7 +233,7 @@ function buildBishop() {
   bez(p, [0.088, 0.70], [0.03, 0.752], 8);
   arc(p, 0, 0.782, 0.036, -60, 90, 8);
   // the slit: a slanted slab cut out of one side of the mitre
-  const snx = 0.64, sny = 0.77, sx0 = 0.012, sy0 = 0.628, sw = 0.017;
+  const snx = 0.64, sny = 0.77, sx0 = 0.012, sy0 = 0.628, sw = 0.026;
   const inSlab = (x, y) => Math.abs((x - sx0) * snx + (y - sy0) * sny) < sw && x > -0.02 && y > 0.5 && y < 0.74;
   lathe(c, p, {
     tex: g,
@@ -258,7 +258,7 @@ function buildBishop() {
     const zmax = Math.sqrt(R * R - x * x);
     for (let z = -zmax; z <= zmax; z += DS * 0.8) c.add(x, y, z, 0, 0, 0, 1, 0.05);
   }
-  return finish(c, { h: 0.82, order: 1 });
+  return finish(c, { h: 0.82, order: 1, ys: YS.b });
 }
 
 function buildQueen() {
@@ -295,7 +295,7 @@ function buildQueen() {
   bez(dome, [0.11, 0.80], [0.04, 0.835], 8);
   arc(dome, 0, 0.868, 0.042, -65, 90, 8);
   lathe(c, dome, { tex: g });
-  return finish(c, { h: 0.91, order: N });
+  return finish(c, { h: 0.91, order: N, ys: YS.q });
 }
 
 function buildKing() {
@@ -312,22 +312,23 @@ function buildKing() {
   bez(p, [0.085, 0.872], [0, 0.878], 8);
   lathe(c, p, { tex: g });
   // the cross
-  box(c, 0, 0.94, 0, 0.026, 0.068, 0.024, 1.05);
-  box(c, 0, 0.948, 0, 0.074, 0.025, 0.024, 1.05);
-  return finish(c, { h: 1.008, order: 2 });
+  // the cross: tall and bold enough to survive a dozen glyph columns
+  box(c, 0, 0.965, 0, 0.03, 0.1, 0.028, 1.1);
+  box(c, 0, 0.985, 0, 0.095, 0.03, 0.028, 1.1);
+  return finish(c, { h: 1.065, order: 2 });
 }
 
 // Horse head: a silhouette in the x/y plane (nose toward -x), inflated into a
 // pillow so it has real thickness, cheeks and shading from every angle.
 const HORSE = [
-  [0.128, 0.10], [0.150, 0.20], [0.156, 0.30], [0.146, 0.40], [0.124, 0.50], [0.094, 0.585],
-  [0.066, 0.640], [0.060, 0.690], [0.052, 0.752],                 // back of the ear
-  [0.022, 0.700], [0.000, 0.672],                                 // ear front, poll
-  [-0.048, 0.652], [-0.098, 0.602], [-0.142, 0.540], [-0.176, 0.478],   // forehead → nose
-  [-0.196, 0.432], [-0.200, 0.396], [-0.184, 0.368], [-0.150, 0.366],   // muzzle
-  [-0.118, 0.392], [-0.088, 0.432], [-0.058, 0.440],              // jaw
-  [-0.034, 0.410], [-0.030, 0.360], [-0.050, 0.300],              // throat
-  [-0.086, 0.240], [-0.116, 0.180], [-0.126, 0.10],               // chest
+  [0.130, 0.10], [0.156, 0.20], [0.166, 0.30], [0.160, 0.40], [0.140, 0.50], [0.110, 0.59],
+  [0.080, 0.650], [0.072, 0.700], [0.070, 0.780],                 // back of the ear, tip
+  [0.030, 0.715], [0.004, 0.690],                                 // ear front, poll
+  [-0.050, 0.672], [-0.105, 0.625], [-0.155, 0.560], [-0.195, 0.495],   // forehead → nose
+  [-0.225, 0.440], [-0.232, 0.395], [-0.214, 0.362], [-0.172, 0.356],   // muzzle
+  [-0.130, 0.384], [-0.092, 0.430], [-0.056, 0.446],              // jaw
+  [-0.022, 0.415], [-0.012, 0.360], [-0.034, 0.300],              // throat
+  [-0.080, 0.240], [-0.118, 0.180], [-0.128, 0.10],               // chest
 ];
 
 function chaikin(poly, keepIdx = []) {
@@ -351,7 +352,7 @@ function buildKnight() {
   const poly = chaikin(chaikin(HORSE, [8]), []);
   const n = poly.length;
   const gs = 0.0055;
-  const x0 = -0.22, y0 = 0.09, gw = Math.ceil(0.40 / gs), gh = Math.ceil(0.68 / gs);
+  const x0 = -0.26, y0 = 0.09, gw = Math.ceil(0.46 / gs), gh = Math.ceil(0.71 / gs);
   const W = 0.078;                                            // inflate distance
   const zf = new Float32Array(gw * gh);
   const inside = (x, y) => {
@@ -384,20 +385,20 @@ function buildKnight() {
   const tex = (x, y) => {
     let t = 1;
     // eye
-    const ex = x + 0.058, ey = y - 0.585;
-    if (ex * ex + ey * ey < 0.00034) t = 0.1;
+    const ex = x + 0.068, ey = y - 0.602;
+    if (ex * ex + ey * ey < 0.0004) t = 0.1;
     // nostril, mouth
-    const nx = x + 0.176, ny = y - 0.412;
+    const nx = x + 0.205, ny = y - 0.408;
     if (nx * nx + ny * ny < 0.00011) t = 0.25;
     // mane: grooves raking down the back of the neck
-    const back = 0.156 - (y - 0.3) * (y - 0.3) * 1.15 - (y > 0.5 ? (y - 0.5) * 0.42 : 0);
+    const back = 0.168 - (y - 0.32) * (y - 0.32) * 1.05 - (y > 0.5 ? (y - 0.5) * 0.4 : 0);
     const dm = back - x;
     if (dm < 0.062 && y > 0.17 && y < 0.67) {
       const s = Math.sin((y * 1.0 + dm * 1.5) * 78);
       t *= s > 0.25 ? 1.12 : 0.42;
     }
     // cheek line
-    const jx = x + 0.03, jy = y - 0.5;
+    const jx = x + 0.035, jy = y - 0.515;
     const jr = Math.hypot(jx, jy);
     if (Math.abs(jr - 0.062) < 0.006 && jx < 0.03 && jy < 0.02) t *= 0.55;
     return t;
@@ -435,13 +436,20 @@ function buildKnight() {
       for (let z = -zr; z <= zr; z += gs * 0.8) c.add(x, y, z, nx, ny, 0, 1);
     }
   }
-  return finish(c, { h: 0.76, order: 1 });
+  return finish(c, { h: 0.785, order: 1, ys: YS.n });
 }
 
-function finish(c, { h, order }) {
+function finish(c, { h, order, ys = 1 }) {
   const pts = new Float32Array(c.a);
   let rmax = 0;
+  h *= ys;
   for (let i = 0; i < pts.length; i += STRIDE) {
+    if (ys !== 1) {
+      // squat the model a little; normals transform by the inverse scale
+      pts[i + 1] *= ys;
+      const nx = pts[i + 3], ny = pts[i + 4] / ys, nz = pts[i + 5], l = Math.hypot(nx, ny, nz);
+      if (l > 0) { pts[i + 3] = nx / l; pts[i + 4] = ny / l; pts[i + 5] = nz / l; }
+    }
     const r = Math.hypot(pts[i], pts[i + 2]);
     if (r > rmax) rmax = r;
   }
@@ -449,6 +457,8 @@ function finish(c, { h, order }) {
   return { pts, n: pts.length / STRIDE, h, rmax, order, period, frames: Math.round(period / STEP) };
 }
 
+// Height trims so the smaller pieces keep clear of the rank behind them.
+const YS = { p: 0.93, r: 0.94, n: 0.92, b: 0.93, q: 0.98 };
 const BUILDERS = { p: buildPawn, r: buildRook, b: buildBishop, q: buildQueen, k: buildKing, n: buildKnight };
 const models = {};
 export function getModel(type) {
@@ -458,22 +468,22 @@ export function getModel(type) {
 // Static facts that don't need the point cloud (so layout can be computed
 // before any model is built).
 export const SHAPE = {
-  p: { h: 0.565, r: 0.19, order: 3 },
-  r: { h: 0.645, r: 0.215, order: 6 },
-  n: { h: 0.76, r: 0.215, order: 1 },
-  b: { h: 0.82, r: 0.20, order: 1 },
-  q: { h: 0.91, r: 0.222, order: 6 },
-  k: { h: 1.008, r: 0.228, order: 2 },
+  p: { h: 0.565 * 0.93, r: 0.19, order: 3 },
+  r: { h: 0.645 * 0.94, r: 0.215, order: 4 },
+  n: { h: 0.785 * 0.92, r: 0.24, order: 1 },
+  b: { h: 0.82 * 0.93, r: 0.20, order: 1 },
+  q: { h: 0.91 * 0.98, r: 0.222, order: 6 },
+  k: { h: 1.065, r: 0.228, order: 2 },
 };
 export const frameCount = (type) => Math.round(TAU / SHAPE[type].order / STEP);
 
 // Grid box (in fine cells) that holds every frame of a type at resolution
 // `res` (columns per model unit).  The foot (model origin) sits at (ox, oy).
-export function gridBox(type, res) {
+export function gridBox(type, res, aspect = ASPECT) {
   const s = SHAPE[type];
   const half = Math.ceil(s.r * res) + 2;
-  const up = Math.ceil(((s.h * COS_T + s.r * SIN_T) * res) / ASPECT) + 2;
-  const down = Math.ceil((s.r * SIN_T * res) / ASPECT) + 2;
+  const up = Math.ceil(((s.h * COS_T + s.r * SIN_T) * res) / aspect) + 2;
+  const down = Math.ceil((s.r * SIN_T * res) / aspect) + 2;
   return { cols: half * 2, rows: up + down, ox: half, oy: up };
 }
 
@@ -485,18 +495,19 @@ let zbuf = new Float32Array(0), lbuf = new Float32Array(0);
 const RAMP = GLYPHS.ramp;
 const RAMP_N = RAMP.length;
 
-export function renderCells(type, yaw, res) {
+export function renderCells(type, yaw, res, aspect = ASPECT) {
   const model = getModel(type);
-  const { cols, rows, ox, oy } = gridBox(type, res);
+  const { cols, rows, ox, oy } = gridBox(type, res, aspect);
   const W = cols * SX, H = rows * SY, N = W * H;
   if (zbuf.length < N) { zbuf = new Float32Array(N); lbuf = new Float32Array(N); }
   zbuf.fill(-1e9, 0, N);
 
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  const kx = res * SX, ky = (res / ASPECT) * SY;
+  const kx = res * SX, ky = (res / aspect) * SY;
   const pxo = ox * SX - 0.5, pyo = oy * SY - 0.5;
   const P = model.pts;
   const depthK = 0.22 / (2 * model.rmax);
+  const invH = 1 / model.h;
   for (let i = 0, e = P.length; i < e; i += STRIDE) {
     const x = P[i], y = P[i + 1], z = P[i + 2];
     const nx = P[i + 3], ny = P[i + 4], nz = P[i + 5];
@@ -522,11 +533,13 @@ export function renderCells(type, yaw, res) {
       const rim = Math.max(0, nx1 * RIM[0] + vny * RIM[1] + vnz * RIM[2]);
       const sp = Math.max(0, nx1 * HALF[0] + vny * HALF[1] + vnz * HALF[2]);
       const sp2 = sp * sp, sp8 = sp2 * sp2 * sp2 * sp2;
-      lum = 0.13 + 0.80 * key + 0.30 * rim * rim + 0.22 * sp8 * sp8;
+      lum = 0.17 + 0.80 * key + 0.30 * rim * rim + 0.22 * sp8 * sp8;
       lum *= P[i + 6];
       lum *= 0.86 + (z1 + model.rmax) * depthK;
-      // contact shadow where the piece meets the table
-      if (y < 0.03) lum *= 0.75;
+      // stage light: heads glow, feet fall away into the dark
+      const hy = clamp((y * invH - 0.05) / 0.75);
+      lum *= 0.6 + 0.5 * hy * hy * (3 - 2 * hy);
+      if (y < 0.03) lum *= 0.8;
     }
     if (d > zbuf[k0]) { zbuf[k0] = d; lbuf[k0] = lum; }
     if (d > zbuf[k0 + 1]) { zbuf[k0 + 1] = d; lbuf[k0 + 1] = lum; }
@@ -558,7 +571,7 @@ export function renderCells(type, yaw, res) {
     if (cnt >= 2) {
       const dens = (3.2 + 9.4 * Math.pow(L, 0.8)) * (0.42 + 0.58 * cov);
       gi = clamp(Math.round(dens + jit * 2.4), 0, RAMP_N - 1);
-      sh = clamp(Math.round((1 - Math.pow(L, 0.82)) * 5.2 + jit * 0.7), 0, 5);
+      sh = clamp(Math.round((1 - Math.pow(L, 0.6)) * 5.5 + jit * 0.7), 0, 5);
     }
     // glyph sits on the centroid of what is actually covered
     const gx = 0.5 + (mx / cnt / SX - 0.5) * 0.85, gy = 0.5 + (my / cnt / SY - 0.5) * 0.85;

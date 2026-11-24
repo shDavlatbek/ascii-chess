@@ -96,7 +96,7 @@ function trailer(st, a, every = 0.2, frac = 0.5) {
 const QUIET = {
   // Pawn: a brisk little hop (two for the double step).
   p(s, st, m, a, A, B) {
-    const hops = m.double ? 2 : 1, T = m.double ? 0.38 : 0.27;
+    const hops = m.double ? 2 : 1, T = m.double ? 0.34 : 0.26;
     s.run(0, T, (u) => {
       put(a, A(), B(), ease.inOutQuad(u));
       const h = (u * hops) % 1;
@@ -104,21 +104,21 @@ const QUIET = {
       a.lean = dirOf(A(), B()).x * 0.08 * hop(u);
     });
     for (let k = 1; k <= hops; k++) s.at((T * k) / hops - 0.01, () => { if (!s.forced) st.sfx('move', k === hops ? 0.6 : 0.35); });
-    squash(s, a, T, T + 0.1, 0.12);
-    return T + 0.1;
+    squash(s, a, T, T + 0.08, 0.12);
+    return T + 0.08;
   },
   // Knight: crouch, leap in an arc with a full turn in the air, land with a squash.
   n(s, st, m, a, A, B) {
     s.run(0, 0.07, (u) => { a.sy = 1 - 0.16 * u; a.sx = 1 + 0.1 * u; });
     s.at(0.07, () => { if (!s.forced) st.sfx('leap', 0.8); });
-    s.run(0.07, 0.36, (u) => {
+    s.run(0.07, 0.34, (u) => {
       put(a, A(), B(), ease.inOutQuad(u));
       a.lift = hop(u) * st.sq * 0.95;
       a.sy = 1 + 0.12 * hop(u); a.sx = 1 - 0.06 * hop(u);
       a.yawAdd = ease.inOutQuad(u) * TAU;
       a.lean = dirOf(A(), B()).x * 0.22 * Math.cos(u * Math.PI);
     });
-    s.at(0.36, () => {
+    s.at(0.34, () => {
       a.lift = 0; a.lean = 0; a.yawAdd = 0;
       if (s.forced) return;
       const b = B();
@@ -127,8 +127,8 @@ const QUIET = {
       st.fx.sparks(b.x, b.y, st.rm ? 2 : 5, { speed: 2.2, spread: Math.PI, up: 0.3, life: 0.25, bigChance: 0 });
       st.shakeBy(1.6, 0, 1);
     });
-    squash(s, a, 0.36, 0.46, 0.26);
-    return 0.46;
+    squash(s, a, 0.34, 0.43, 0.26);
+    return 0.43;
   },
   // King: lifts, carries its weight across, sets down with a thud.
   k(s, st, m, a, A, B) {
@@ -146,14 +146,14 @@ const QUIET = {
       st.ripple(b.x, b.y, 0.6);
       st.shakeBy(1.8, 0, 1);
     });
-    squash(s, a, 0.38, 0.46, 0.1);
-    return 0.46;
+    squash(s, a, 0.38, 0.44, 0.1);
+    return 0.44;
   },
 };
 // Bishop / rook / queen: a fast glide that leaves fading glyphs behind.
 function glide(s, st, m, a, A, B) {
   const d = dirOf(A(), B()).d / st.sq;
-  const T = clamp(0.2 + d * 0.032, 0.24, 0.4);
+  const T = clamp(0.19 + d * 0.03, 0.22, 0.37);
   const tr = trailer(st, a, a.type === 'q' ? 0.16 : 0.22, a.type === 'q' ? 0.6 : 0.45);
   s.at(0, () => { if (!s.forced) st.sfx('slide', clamp(0.4 + d * 0.1)); });
   s.run(0, T, (u, q) => {
@@ -362,7 +362,7 @@ const KILL = {
   r(s, st, m, a, v, vsq, A, B) {
     const V = () => st.foot(vsq), D = () => dirOf(A(), V());
     const back = () => along(A(), D(), -0.36 * st.sq);
-    const tr = trailer(st, a, 0.16, 0.6);
+    const tr = trailer(st, a, 0.2, 0.42);
     s.run(0, 0.2, (u) => {
       const d = D(), e = ease.outCubic(u);
       put(a, A(), back(), e);
@@ -422,9 +422,9 @@ const KILL = {
       if (!q.forced) tr();
     });
     const cuts = [
-      { t: 0.25, a0: -2.2, len: 1.9, w: 0.11 },
-      { t: 0.37, a0: -0.9, len: 1.9, w: 0.11 },
-      { t: 0.50, a0: 3.02, len: 2.5, w: 0.2 },
+      { t: 0.24, a0: -2.2, len: 1.9, w: 0.11 },
+      { t: 0.345, a0: -0.9, len: 1.9, w: 0.11 },
+      { t: 0.45, a0: 3.02, len: 2.5, w: 0.2 },
     ];
     const vcen = () => { const p = V(); return { x: p.x, y: p.y - st.height(v.type) * 0.48 }; };
     cuts.forEach((c, i) => {
@@ -444,26 +444,26 @@ const KILL = {
       });
       if (i < 2) {
         // dart to the next side between cuts
-        s.run(c.t + 0.035, c.t + 0.11, (u, q) => {
+        s.run(c.t + 0.03, c.t + 0.095, (u, q) => {
           put(a, spots[i](), spots[i + 1](), ease.inOutQuad(u));
           a.yawAdd = (2 + i) * per + u * per; a.lift = st.sq * (0.16 + 0.2 * hop(u));
           if (!q.forced) tr();
         });
       }
     });
-    s.at(0.53, () => strike(s, st, v, vsq, {
+    s.at(0.475, () => strike(s, st, v, vsq, {
       dir: { x: Math.cos(3.02) * 0.4, y: -0.2 }, power: 2.0, burst: 3.4, up: 1.8, shake: 9, stop: 0.09, sparks: 18, sparkSpread: 6.2, sparkSpeed: 8,
       ripple: 1.4, flash: 1.3, intensity: 1,
     }));
     const tr2 = trailer(st, a, 0.16, 0.5);
-    s.run(0.62, 0.95, (u, q) => {
+    s.run(0.55, 0.84, (u, q) => {
       put(a, spots[2](), B(), ease.inOutCubic(u));
       a.lift = st.sq * 0.16 * (1 - ease.inQuad(u));
       a.yawAdd = (1 - ease.outCubic(u)) * per * 2;
       if (!q.forced && u < 0.9) tr2();
     });
-    settle(s, st, a, 0.95, B);
-    return 1.1;
+    settle(s, st, a, 0.84, B);
+    return 0.97;
   },
 
   // King: slow, certain, and final — one overhead cleave.
@@ -616,7 +616,7 @@ export function buildIntro(st, actors) {
       if (s.forced) return;
       const c = st.cells(a), fx = st.fx, sq = st.sq;
       for (let i = 0; i < c.n; i++) {
-        if (st.rm && i % 2) continue;
+        if (fx.rnd() > (st.rm ? 0.35 : 0.7)) continue;
         const r = fx.rnd(), ang = fx.rnd() * TAU, rad = (0.5 + fx.rnd() * 1.4) * sq;
         fx.home({
           sx: c.x[i] + Math.cos(ang) * rad, sy: c.y[i] + Math.sin(ang) * rad * 0.7 - sq * 0.5, tx: c.x[i], ty: c.y[i],

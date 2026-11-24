@@ -12,7 +12,13 @@ import { TAU } from '../core/util.js';
 import { ASPECT, SX, SY, STEP, TILT, SHAPE, frameCount, gridBox, renderCells } from './sculpt.js';
 
 export const ARMY = { w: PAL.bone, b: PAL.ember };
-const FONT_K = 1.86;               // font px per fine cell width → glyphs overlap a little
+// Tunables (the dev harness pokes these via ?fineK= & ?fontK=).
+export const TUNE = {
+  fineK: 0.8,                      // our fine cell vs the layout's suggested fineW
+  fontK: 0,                        // font px per fine cell width (0 = automatic, ~1.7–1.86)
+  weight: 0,                       // 0 = automatic
+  breath: 0.011,                   // idle breathing: vertical scale amplitude
+};
 const BACKING = '#0b0b11';         // the occluding body behind the glyphs
 
 function makeCanvas(w, h) {
@@ -31,24 +37,33 @@ export function createSprites() {
 
   function configure(layout) {
     const sq = layout.sq, dpr = layout.dpr || 1;
-    // Fine cell: a touch finer than the layout's suggestion so a king is ~14
-    // glyphs wide; never below ~2 px or the glyphs stop being glyphs.
-    const fw = Math.max(2.1, (layout.fineW || sq / 17) * 0.8);
-    const fh = fw * ASPECT;
-    const S = layout.pieceH / (SHAPE.k.h * Math.cos(TILT));   // px per model unit
+    // Fine cell: whole device pixels so the glyph lattice is perfectly even
+    // (uneven rounding shows up as dark seams through the body).
+    // On dense displays glyphs stay legible smaller, so the sculpture gets
+    // a finer lattice there.
+    const fk = TUNE.fineK * (dpr >= 1.75 ? 0.88 : 1);
+    const fw = Math.max(Math.round(2 * dpr), Math.round((layout.fineW || sq / 17) * fk * dpr)) / dpr;
+    const fh = Math.round(fw * ASPECT * dpr) / dpr;
+    // px per model unit: the king's whole visible extent (front rim of the foot
+    // to the tip of the cross) is layout.pieceH
+    const S = layout.pieceH / (SHAPE.k.h * Math.cos(TILT) + SHAPE.k.r * Math.sin(TILT));
     const res = Math.round((S / fw) * 50) / 50;               // columns per model unit
-    const fontPx = Math.round(fw * FONT_K * 4) / 4;
-    const k = `${res}|${fw.toFixed(3)}|${fontPx}|${dpr}`;
-    if (M && Math.abs(M.res - res) > 1e-6) cellCache.clear();
+    const aspect = fh / fw;
+    // low-dpi: keep glyphs just inside their cell or they smear into a mesh
+    const fontPx = Math.round(fw * (TUNE.fontK || (dpr >= 1.75 ? 1.86 : 1.7)) * 4) / 4;
+    const k = `${res}|${fw.toFixed(3)}|${fontPx}|${dpr}|${TUNE.weight}|${TUNE.fontK}`;
+    if (M && (Math.abs(M.res - res) > 1e-6 || Math.abs(M.aspect - aspect) > 1e-6)) cellCache.clear();
     if (k !== key) { bitmaps.clear(); key = k; for (const t in boxes) delete boxes[t]; }
-    M = { sq, dpr, fw, fh, S, res, fontPx };
+    // tiny glyphs clog at bold weight; lighten them so they stay glyphs
+    const weight = TUNE.weight || (fontPx * dpr < 7.5 ? 500 : 700);
+    M = { sq, dpr, fw, fh, S, res, fontPx, aspect, weight };
     return M;
   }
 
   function box(type) {
     let b = boxes[type];
     if (!b) {
-      const g = gridBox(type, M.res);
+      const g = gridBox(type, M.res, M.aspect);
       const pad = Math.ceil(M.fontPx * 0.6) + 1;
       b = boxes[type] = {
         ...g,
@@ -72,7 +87,7 @@ export function createSprites() {
   function cells(type, i) {
     const k = `${type}|${i}`;
     let c = cellCache.get(k);
-    if (!c) { c = renderCells(type, i * STEP, M.res); cellCache.set(k, c); }
+    if (!c) { c = renderCells(type, i * STEP, M.res, M.aspect); cellCache.set(k, c); }
     return c;
   }
 
@@ -86,7 +101,7 @@ export function createSprites() {
     g.scale(dpr, dpr);
     // 1. occluder: the exact sub-cell silhouette, grown by a hair
     g.fillStyle = BACKING;
-    const sw = fw / SX, sh = fh / SY, grow = Math.max(0.6, fw * 0.16);
+    const sw = fw / SX, sh = fh / SY, grow = Math.max(1.5, fw * 0.42);
     for (let n = 0; n < c.n; n++) {
       const m = c.mask[n], x0 = b.pad + c.col[n] * fw, y0 = b.pad + c.row[n] * fh;
       for (let j = 0; j < SY; j++) {
@@ -105,11 +120,13 @@ export function createSprites() {
     // 2. glyphs, shadow shades first so lit glyphs overlap on top
     const pal = ARMY[color];
     for (let s = 5; s >= 0; s--) {
-      const atlas = getAtlas({ fontPx, color: pal[s], dpr });
+      const atlas = getAtlas({ fontPx, color: pal[s], dpr, weight: M.weight });
+      // snap each glyph's atlas cell to whole device pixels so it stays crisp
+      const hw = atlas.w / 2, hh = atlas.h / 2;
       for (let n = 0; n < c.n; n++) {
         if (c.shade[n] !== s || !c.code[n]) continue;
         const x = b.ax + c.x[n] * fw, y = b.ay + c.y[n] * fh;
-        atlas.drawCode(g, c.code[n], Math.round(x * dpr) / dpr, Math.round(y * dpr) / dpr);
+        atlas.drawCode(g, c.code[n], Math.round((x - hw) * dpr) / dpr + hw, Math.round((y - hh) * dpr) / dpr + hh);
       }
     }
     bitmaps.set(k, bm);

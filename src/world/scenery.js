@@ -1,13 +1,14 @@
 // Scenery around the board: warm architecture drifting through the top band
 // and creeping down the sides (stamped into the field's own cell grid), thin
-// hanging vines, rain, embers, and the vignette.
+// hanging vines, rain and embers.  (The vignette is baked into the field's
+// cell cache — see field.js — and everything here dims itself to match.)
 //
 // Everything here stays clear of the board itself and runs dim and sparse
 // under the HUD panels (`layout.panels`), which will carry text.
 
 import { PAL, GLYPHS } from '../core/palette.js';
 import { getAtlas } from '../core/glyphs.js';
-import { clamp, hash2, rng, rgba, TAU } from '../core/util.js';
+import { clamp, hash2, rng } from '../core/util.js';
 import { C } from './field.js';
 
 const K = (ch) => ch.charCodeAt(0);
@@ -20,7 +21,6 @@ const FRAGMENTS = ['[==]', '[=]=[', ']==-', '=[]=', '[I]', 'I#', 'H#', '|=|', '=
 export function createScenery(field) {
   let L = null, sizeKey = '';
   let structs = [], strands = [], fgStrands = [], drops = [], embers = [];
-  let vignette = null, redGlow = null;
   let period = 1, stampedKey = '';
   let smallPx = 8, smallStep = 9, midPx = 10;
   let R = rng(1);
@@ -91,11 +91,11 @@ export function createScenery(field) {
     const bottom = Math.round(rows * (L.portrait ? 0.86 : 0.74));
     for (const [z0, z1, side] of zones) {
       const zw = z1 - z0 + 1;
-      const tries = Math.round((zw * (bottom - skyMax)) / (L.portrait ? 5 : 9));
+      const tries = Math.round((zw * (bottom - skyMax)) / (L.portrait ? 5 : 12));
       for (let k = 0; k < tries; k++) {
         const depth = R();                                 // 0 at the top of the side, 1 at its foot
         const outer = R() ** 1.7;                          // 0 hugging the screen edge
-        if (R() > (1 - depth) ** 1.5 * (1 - 0.72 * outer) + 0.04) continue;
+        if (R() > (1 - depth) ** 1.7 * (1 - 0.72 * outer) + 0.03) continue;
         const sh = shape(Math.min(8, zw), 3);
         const span = Math.max(0, zw - sh.w);
         const c = side === 0 ? z0 + Math.round(outer * span) : z1 - sh.w + 1 - Math.round(outer * span);
@@ -151,7 +151,7 @@ export function createScenery(field) {
       if (thin) glyph[k] = u < 0.6 ? K('|') : u < 0.85 ? K(':') : K('!');
       else glyph[k] = u < 0.46 ? K('t') : u < 0.6 ? K('!') : u < 0.72 ? K('|') : u < 0.82 ? K(';') : u < 0.9 ? K(':') : K('*');
       tint[k] = glyph[k] === 42 ? 1 : 0;                  // blossoms are brighter
-      dim[k] = 1 - 0.3 * panelAt(x, k * step);
+      dim[k] = (1 - 0.3 * panelAt(x, k * step)) * (1 - field.vignetteAt(x, k * step));
     }
     if (!thin && len > 4) { glyph[len - 1] = K('*'); tint[len - 1] = fg ? 1 : 2; }   // a bud at the tip
     return { x, len, glyph, tint, dim, ph: R() * 40, amp: (0.5 + R()) * step * (fg ? 0.9 : 0.55), rate: 0.35 + 0.4 * R(), thin };
@@ -224,7 +224,7 @@ export function createScenery(field) {
     for (const d of drops) {
       if (!d.on || d.fg !== fg) continue;
       const fade = clamp((d.floor - d.y) / (smallStep * 4)) * clamp((d.y + smallStep * 2) / (smallStep * 3));
-      const dim = fg ? 1 : 1 - 0.5 * panelAt(d.x, d.y);
+      const dim = (fg ? 1 : 1 - 0.5 * panelAt(d.x, d.y)) * (1 - field.vignetteAt(d.x, d.y));
       for (let k = 0; k < d.len; k++) {
         const a = d.a * fade * dim * (1 - k / d.len);
         if (a < 0.03) continue;
@@ -262,25 +262,12 @@ export function createScenery(field) {
       const f = e.life / e.max;
       const env = Math.sin(Math.PI * f) ** 0.7;
       const flick = 0.66 + 0.34 * Math.sin(t * 8 + e.seed * 7);
-      const a = env * flick * (fg ? 0.9 : 0.95) * (1 - 0.35 * panelAt(e.x, e.y));
+      const a = env * flick * (fg ? 0.9 : 0.95) * (1 - 0.35 * panelAt(e.x, e.y)) * (1 - 0.6 * field.vignetteAt(e.x, e.y));
       if (a < 0.04) continue;
       const g = f > 0.86 ? SPARK[3] : f > 0.68 ? SPARK[1] : hash2(Math.floor(t * 3 + e.seed), 1, 2) < 0.14 ? SPARK[2] : SPARK[0];
       ctx.globalAlpha = a;
       atl[e.hot ? 1 : 0].drawCode(ctx, g, e.x, e.y);
     }
-  }
-
-  // ------------------------------------------------------------ vignette --
-
-  function radial(inner, stops) {
-    const S = 256;
-    const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(S, S) : Object.assign(document.createElement('canvas'), { width: S, height: S });
-    const g = cv.getContext('2d');
-    const grad = g.createRadialGradient(S / 2, S / 2, inner * S / 2, S / 2, S / 2, S * Math.SQRT1_2);
-    for (const [at, color] of stops) grad.addColorStop(at, color);
-    g.fillStyle = grad;
-    g.fillRect(0, 0, S, S);
-    return cv;
   }
 
   // ----------------------------------------------------------------- api --
@@ -299,10 +286,6 @@ export function createScenery(field) {
     }
     stampedKey = '';
     stampArchitecture();
-    if (!vignette) {
-      vignette = radial(0.3, [[0, 'rgba(6,6,10,0)'], [0.45, 'rgba(6,6,10,0.16)'], [0.8, 'rgba(6,6,10,0.5)'], [1, 'rgba(6,6,10,0.8)']]);
-      redGlow = radial(0.5, [[0, rgba(PAL.danger, 0)], [0.55, rgba(PAL.danger, 0.1)], [1, rgba(PAL.danger, 0.42)]]);
-    }
   }
 
   function update(env) {
@@ -384,15 +367,6 @@ export function createScenery(field) {
     const sparks = [getAtlas({ fontPx: midPx, color: PAL.spark[2], dpr }), getAtlas({ fontPx: midPx, color: PAL.spark[1], dpr })];
     drawEmbers(ctx, sparks, env.now, true);
 
-    // Vignette (oversized so a screen shake never shows its edge), then the danger glow.
-    const m = 48;
-    ctx.globalAlpha = clamp(0.8 * P.vig);
-    ctx.drawImage(vignette, -m, -m, L.W + m * 2, L.H + m * 2);
-    if (P.red > 0.01) {
-      const beat = env.reduced ? 0.8 : 0.72 + 0.28 * Math.sin(env.now * 2.6);
-      ctx.globalAlpha = clamp(P.red * 0.5 * beat);
-      ctx.drawImage(redGlow, -m, -m, L.W + m * 2, L.H + m * 2);
-    }
     ctx.globalAlpha = prev;
   }
 

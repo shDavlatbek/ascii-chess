@@ -93,7 +93,7 @@ export function createFx() {
       const life = (o.life ?? 1.05) * (0.7 + rnd() * 0.6);
       push(base({
         x, y, vx, vy, g, drag: o.drag ?? 0.9,
-        rot: 0, vr: (rnd() - 0.5) * (o.spin ?? 16),
+        rot: 0, vr: rnd() < 0.6 ? (rnd() - 0.5) * (o.spin ?? 16) : 0,
         life: life + hold, hold, hvx, hvy,
         code: cells.code[i], set: o.set, ci: cells.shade[i], ci0: cells.shade[i],
         ground: o.groundY + (rnd() * 0.5 - 0.12) * sq + dir.y * sp * 0.14 + Math.max(0, y - o.groundY),
@@ -117,7 +117,7 @@ export function createFx() {
         g: (o.gravity ?? 7) * sq, drag: 2.6,
         life: (o.life ?? 0.42) * (0.5 + rnd() * 0.9), delay: (o.delaySpread ?? 0) * rnd(),
         code: r < 0.62 ? 42 : r < 0.8 ? 43 : r < 0.92 ? 120 : 46,       // * + x .
-        set, ci: 0, ci0: 0, big: rnd() < (o.bigChance ?? 0.3) ? 1 : 0,
+        set, ci: 0, ci0: 0, big: rnd() < (o.bigChance ?? 0.45) ? 1 : 0,
         fade: 0.35, cool: 4,
       }));
     }
@@ -200,8 +200,10 @@ export function createFx() {
     shakeT += dtReal;
     if (shakeAmp > 0.05) {
       const s1 = Math.sin(shakeT * 91), s2 = Math.sin(shakeT * 67 + 1.3), s3 = Math.sin(shakeT * 113 + 0.7);
-      shake.x = shakeAmp * (shakeDx * s1 + 0.45 * s2);
-      shake.y = shakeAmp * (shakeDy * s1 + 0.45 * s3);
+      // whole device pixels: the world stays crisp (and cheap to blit) while it rattles
+      const d = M.dpr || 1;
+      shake.x = Math.round(shakeAmp * (shakeDx * s1 + 0.45 * s2) * d) / d;
+      shake.y = Math.round(shakeAmp * (shakeDy * s1 + 0.45 * s3) * d) / d;
       shakeAmp *= Math.exp(-dtReal * 11);
     } else { shake.x = 0; shake.y = 0; shakeAmp = 0; }
 
@@ -243,7 +245,7 @@ export function createFx() {
         p.rot += p.vr * h;
         if (p.y >= p.ground && p.vy > 0) {
           if (p.vy > M.sq * 2.2) { p.vy *= -0.28; p.vx *= 0.5; p.vr *= 0.4; p.y = p.ground; }
-          else { p.landed = true; p.vx = 0; p.vy = 0; p.vr = 0; p.rot = Math.round(p.rot / (Math.PI / 2)) * (Math.PI / 2) * 0; }
+          else { p.landed = true; p.vx = 0; p.vy = 0; p.vr = 0; p.rot = 0; }
         }
       }
       if (p.decay) {

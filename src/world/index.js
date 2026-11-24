@@ -12,7 +12,6 @@
 // scenery.js  architecture, vines, rain, embers, vignette
 // moods.js    the dials behind setMood() and their cross-fade
 
-import { PAL } from '../core/palette.js';
 import { clamp } from '../core/util.js';
 import { createField } from './field.js';
 import { createScenery } from './scenery.js';
@@ -34,6 +33,7 @@ export function createWorld({ bus } = {}) {   // eslint-disable-line no-unused-v
     L = layout; key = layoutKey(layout);
     field.resize(layout, env);
     scenery.resize(layout);
+    field.flush();          // architecture is in place before the first frame
   }
 
   // Tolerate a caller that swaps `view.layout` without calling resize().
@@ -61,10 +61,7 @@ export function createWorld({ bus } = {}) {   // eslint-disable-line no-unused-v
   function draw(ctx, view) {
     sync(view);
     if (!L) return;
-    // The void.  Oversized so a screen shake never exposes an unpainted edge.
-    ctx.fillStyle = PAL.bg;
-    ctx.fillRect(-64, -64, L.W + 128, L.H + 128);
-    field.draw(ctx, view || {});
+    field.draw(ctx, view || {});       // paints the void too (it is baked into the cell cache)
     scenery.drawBack(ctx, env);
   }
 

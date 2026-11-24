@@ -7,15 +7,24 @@
 // field thins out into a sparse dark plain.  Architecture cells (stamped in by
 // scenery.js) live in the same grid.
 //
-// Rendering: cells are cached on an offscreen layer and only the ones whose
-// look changed are repainted (a hundred or so per frame), then the layer is
-// blitted in one drawImage.  Highlights, flashes and ripples are per-frame
-// "fx" written on top of a cell's base look; a cell stays hot only while an
-// effect touches it and is restored the frame after.
+// Rendering: the base look of every cell is cached on a handful of offscreen
+// tiles.  Only cells whose look changed are repainted, and only a couple of
+// tiles are touched per frame, round-robin — a canvas that was drawn from and
+// then modified has to be re-snapshotted by the browser, so touching the whole
+// cache every frame would cost a full-screen copy.  Glyphs change a few times
+// a second at most, so a tile lagging ~100 ms is invisible.  Highlights,
+// flashes and ripples are per-frame "fx": cells an effect touches are "hot"
+// and are painted straight onto the main canvas over the tiles, so the cache
+// never has to follow an animation.
+//
+// The vignette and the danger glow are baked into this cache (each cell's
+// patch of void gets its own slightly darker / redder shade and its glyph is
+// dimmed to match) instead of being composited over the screen: same look,
+// no full-screen blend per frame, and it can never dim a piece.
 
 import { PAL, GLYPHS } from '../core/palette.js';
 import { getAtlas } from '../core/glyphs.js';
-import { clamp, smoothstep, hash2, noise3, hexToRgb, sqFile, sqRank, TAU } from '../core/util.js';
+import { clamp, smoothstep, hash2, noise3, hexToRgb, mix, sqFile, sqRank, TAU } from '../core/util.js';
 
 const Z_VOID = 0, Z_OUT = 1, Z_LIGHT = 2, Z_DARK = 3;
 
@@ -49,32 +58,38 @@ const BASE_COLORS = [
   PAL.lightSq, PAL.darkSq, PAL.field[0], PAL.boardEdge,
   PAL.warm[0], PAL.warm[1], PAL.warm[2], PAL.warm[3],
   PAL.select, PAL.target, PAL.capture, PAL.last, PAL.danger,
-  '#85858f',      // mate: drained
+  '#9a9aa6',      // mate: drained
   '#7f9fc4',      // draw: cold
 ];
-const MAX_CUSTOM = 6;   // extra colours callers may pass to ripple()/flash()
+const TILE_COLS = 27, TILE_ROWS = 11;   // target tile size in cells
+const TILES_PER_FRAME = 2;              // tiles repainted per frame (the rest wait their turn)
+const MAX_CUSTOM = 6;                   // extra colours callers may pass to ripple() / flash()
+const VOID_DEEP = '#050508';            // what the void falls to in the corners
+const V_LEVELS = 24, R_LEVELS = 24;     // void shades: vignette depth × danger glow (≈ 1 RGB step each)
 
 export function createField() {
   let L = null;
   let cols = 0, rows = 0, n = 0;
   let cw = 1, ch = 1, ox = 0, oy = 0, dpr = 1;
 
-  // Offscreen layer (device pixels, no transform).
-  let layer = null, lctx = null, lw = 0, lh = 0;
+  // Offscreen cache tiles (device pixels, no transform).
+  let tiles = [], tileOf = null, nextTile = 0;
   let dx = null, dy = null, dw = 0, dh = 0;
   let atlases = [];
   const colors = BASE_COLORS.slice();
 
   // Static per-cell data.
-  let zone, ccol, crow, rnd, panel, edge, nearB;
+  let zone, ccol, crow, rnd, panel, edge, nearB, vig, glow, bgi;
+  const bgStyles = [];
   // Base look (what the flow noise decided at the cell's last refresh).
   let gl, col, al, tk, tc, nextT, jit;
   // Architecture stamps (owned by scenery.js through arch*()).
   let aGl, aCol, aAl, aLamp, bGl, bCol, bAl, bLamp;
   // Per-frame fx.
-  let fxK, fxC, fxAbs, fxAdd, fxG, hotStamp, hotA, hotB, hotCount = 0, prevCount = 0;
-  let dirty, dirtyList, dirtyCount = 0;
+  let fxK, fxC, fxAbs, fxAdd, fxG, hotStamp, hotA, hotB, hotCount = 0;
+  let dirty;
   let frame = 1;
+  let U = 1;               // cache-pixel → current context unit (1 when drawing in device pixels)
 
   // Shared clock + mood dials, owned by index.js and read here by reference.
   let env = { now: 0, flowT: 0, dt: 0, p: null, moving: false, reduced: false };
@@ -94,14 +109,15 @@ export function createField() {
 
     zone = new Uint8Array(n); ccol = new Uint16Array(n); crow = new Uint16Array(n);
     rnd = new Float32Array(n); panel = new Float32Array(n); edge = new Float32Array(n); nearB = new Float32Array(n);
+    vig = new Float32Array(n); glow = new Float32Array(n); bgi = new Uint16Array(n);
     gl = new Uint8Array(n); col = new Uint8Array(n); al = new Float32Array(n);
     tk = new Float32Array(n); tc = new Uint8Array(n); nextT = new Float32Array(n); jit = new Float32Array(n);
     aGl = new Uint8Array(n); aCol = new Uint8Array(n); aAl = new Float32Array(n); aLamp = new Uint8Array(n);
     bGl = new Uint8Array(n); bCol = new Uint8Array(n); bAl = new Float32Array(n); bLamp = new Uint8Array(n);
     fxK = new Float32Array(n); fxC = new Uint8Array(n); fxAbs = new Float32Array(n).fill(-1);
     fxAdd = new Float32Array(n); fxG = new Uint8Array(n); hotStamp = new Uint32Array(n);
-    hotA = new Int32Array(n); hotB = new Int32Array(n); hotCount = 0; prevCount = 0;
-    dirty = new Uint8Array(n); dirtyList = new Int32Array(n); dirtyCount = 0;
+    hotA = new Int32Array(n); hotB = new Int32Array(n); hotCount = 0;
+    dirty = new Uint8Array(n); tileOf = new Uint8Array(n);
 
     const b = L.board, bc1 = b.c0 + b.cols, br1 = b.r0 + b.rows;
     const mx = Math.max(1, L.W / 2 - b.size / 2), bcx = b.x + b.size / 2;
@@ -134,6 +150,10 @@ export function createField() {
         edge[i] = smoothstep(0.1, 1, Math.max(ex, ey));
         const ddx = Math.max(0, b.x - x, x - b.x - b.size), ddy = Math.max(0, b.y - y, y - b.y - b.size);
         nearB[i] = 1 - clamp(Math.hypot(ddx, ddy) / (L.sq * 2.6));
+        vig[i] = vignetteAt(x, y);
+        // Where the danger glow gathers in check: the rim of the screen, never the board.
+        const rim = Math.max(Math.abs(x - L.W / 2) / (L.W / 2), Math.abs(y - L.H / 2) / (L.H / 2));
+        glow[i] = smoothstep(0.62, 1.08, rim) ** 1.2 * clamp(Math.hypot(ddx, ddy) / (L.sq * 2.2));
       }
     }
 
@@ -143,26 +163,50 @@ export function createField() {
     for (let r = 0; r <= rows; r++) dy[r] = Math.round((oy + r * ch) * dpr);
     dw = Math.round(cw * dpr); dh = Math.round(ch * dpr);
 
-    lw = Math.ceil(L.W * dpr); lh = Math.ceil(L.H * dpr);
-    if (!layer || layer.width !== lw || layer.height !== lh) {
-      layer = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(lw, lh) : Object.assign(document.createElement('canvas'), { width: lw, height: lh });
-      lctx = layer.getContext('2d');
-    } else {
-      lctx.clearRect(0, 0, lw, lh);
+    // Cache tiles: an even grid of cell blocks, each with its own canvas and dirty list.
+    const tx = Math.max(1, Math.round(cols / TILE_COLS)), ty = Math.max(1, Math.round(rows / TILE_ROWS));
+    const tcw = Math.ceil(cols / tx), trh = Math.ceil(rows / ty);
+    tiles = [];
+    for (let j = 0; j < ty; j++) {
+      for (let i = 0; i < tx; i++) {
+        const c0 = i * tcw, r0 = j * trh, c1 = Math.min(cols, c0 + tcw), r1 = Math.min(rows, r0 + trh);
+        if (c0 >= c1 || r0 >= r1) continue;
+        const w = dx[c1] - dx[c0], h = dy[r1] - dy[r0];
+        const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+        // Opaque tiles: the void colour is baked in, so blitting one is a plain copy.
+        const g = canvas.getContext('2d', { alpha: false });
+        g.fillStyle = PAL.bg;
+        g.fillRect(0, 0, w, h);
+        const id = tiles.length;
+        tiles.push({ canvas, g, x: dx[c0], y: dy[r0], w, h, list: new Int32Array((c1 - c0) * (r1 - r0)), count: 0 });
+        for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) tileOf[r * cols + c] = id;
+      }
     }
-    lctx.globalCompositeOperation = 'lighter';   // tint passes add up to an exact colour mix
+    nextTile = 0;
     atlases = [];
 
     ripples.length = 0; flashes.length = 0;
-    if (env.p) refreshAll();
+    if (env.p) { refreshAll(); flushSome(tiles.length); }
+  }
+
+  // Vignette strength at a point: 0 on and around the board, deepening towards the corners.
+  function vignetteAt(x, y) {
+    const b = L.board;
+    const d = Math.hypot((x - L.W / 2) / (L.W / 2), (y - L.H / 2) / (L.H / 2)) * Math.SQRT1_2;
+    const away = clamp(Math.hypot(Math.max(0, b.x - x, x - b.x - b.size), Math.max(0, b.y - y, y - b.y - b.size)) / (L.sq * 2.2));
+    return 0.66 * smoothstep(0.3, 1, d) ** 1.3 * away;
+  }
+
+  function bgStyle(k) {
+    return bgStyles[k] || (bgStyles[k] = mix(mix(PAL.bg, VOID_DEEP, (k % V_LEVELS) / (V_LEVELS - 1)), PAL.danger, 0.17 * Math.floor(k / V_LEVELS) / (R_LEVELS - 1)));
   }
 
   function refreshAll() {
     for (let i = 0; i < n; i++) {
-      gl[i] = 0; al[i] = 0;
+      gl[i] = 0; al[i] = 0; bgi[i] = 65535;
       refresh(i);
       // first intervals are spread out so the cadence starts staggered
-      if (nextT[i] < 1e8) nextT[i] = env.now + (nextT[i] - env.now) * rnd[(i * 7 + 3) % n];
+      nextT[i] = env.now + (nextT[i] - env.now) * rnd[(i * 7 + 3) % n];
     }
   }
 
@@ -199,14 +243,19 @@ export function createField() {
   // ------------------------------------------------------------ base look --
 
   function markDirty(i) {
-    if (!dirty[i]) { dirty[i] = 1; dirtyList[dirtyCount++] = i; }
+    if (!dirty[i]) { dirty[i] = 1; const t = tiles[tileOf[i]]; t.list[t.count++] = i; }
   }
 
   function refresh(i) {
     const z = zone[i];
-    if (z === Z_VOID) { nextT[i] = 1e9; return; }
     const P = env.p, now = env.now, ft = env.flowT;
     const c = ccol[i], r = crow[i], rn = rnd[i];
+
+    // This cell's patch of void: vignette depth and, in check, a red glow from the edges.
+    const vv = Math.min(0.95, vig[i] * P.vig);
+    const bk = Math.round(vv * (V_LEVELS - 1)) + V_LEVELS * Math.round(clamp(P.red * glow[i]) * (R_LEVELS - 1));
+    if (bk !== bgi[i]) { bgi[i] = bk; markDirty(i); }
+    if (z === Z_VOID) { nextT[i] = now + (env.moving ? 0.1 + 0.3 * rn : 2 + 3 * rn); return; }
 
     // Soft travelling bands of brightness shared by the whole field.
     const b0 = 0.62 * noise3(c * 0.055 - ft * 0.11, r * 0.13 + ft * 0.02, ft * 0.045, 11)
@@ -238,7 +287,7 @@ export function createField() {
       const nz = noise3(c * 0.15 - ft * 0.4, r * 0.77 + 17.1, ft * 0.06, 41);
       g = DARK[Math.floor(frac(nz * 3.3 + rn * 0.1) * DARK.length)];
       ci = C.DARK;
-      a = (0.52 + 0.22 * lift) * P.board;
+      a = (0.46 + 0.16 * lift) * P.board;
       iv = 0.45 + 1.0 * rn;
     } else {
       // The plain beyond the board: sparse, dark, with big empty patches.
@@ -259,7 +308,7 @@ export function createField() {
     // Mood tint: grey drains, cool chills, red creeps in from the screen edges.
     let mk = 0, mc = 0;
     if (g) {
-      if (P.grey > 0.01) { mk = P.grey * 0.84; mc = C.GREY; a *= 1 - 0.12 * P.grey; }
+      if (P.grey > 0.01) { mk = P.grey * 0.8; mc = C.GREY; a *= 1 - 0.08 * P.grey; }
       if (P.cool > 0.01 && P.cool * 0.6 > mk) { mk = P.cool * 0.6; mc = C.COOL; }
       if (P.red > 0.01) {
         const e = z === Z_OUT ? edge[i] : edge[i] * 0.2;
@@ -284,6 +333,7 @@ export function createField() {
       jit[i] = 0;
     }
 
+    a *= 1 - vv;
     if (a < 0.03) { g = 0; a = 0; }
     if (g !== gl[i] || ci !== col[i] || mc !== tc[i] || Math.abs(a - al[i]) > 0.015 || Math.abs(mk - tk[i]) > 0.02) {
       gl[i] = g; col[i] = ci; al[i] = a; tk[i] = mk; tc[i] = mc;
@@ -296,57 +346,111 @@ export function createField() {
 
   // ------------------------------------------------------------- drawing --
 
-  function blit(ci, g, x0, y0, a) {
+  // Base look → cache tile (device pixels).
+  function blit(g2, ci, g, x0, y0, a) {
     const at = atlases[ci] || atlas(ci);
-    lctx.globalAlpha = a;
-    lctx.drawImage(at.canvas, (g - 33) * at.cellW + at.sx0, at.sy0, at.sw, at.sh, x0 + at.ox, y0 + at.oy, at.sw, at.sh);
+    g2.globalAlpha = a > 1 ? 1 : a;
+    g2.drawImage(at.canvas, (g - 33) * at.cellW + at.sx0, at.sy0, at.sw, at.sh, x0 + at.ox, y0 + at.oy, at.sw, at.sh);
   }
 
-  function drawCell(i) {
-    const c = ccol[i], r = crow[i];
-    const x0 = dx[c], y0 = dy[r];
-    lctx.clearRect(x0, y0, dx[c + 1] - x0, dy[r + 1] - y0);
-    const g = fxG[i] || gl[i];
-    if (!g) return;
-    let a = (fxAbs[i] >= 0 ? fxAbs[i] : al[i]) + fxAdd[i];
-    if (a < 0.025) return;
-    if (a > 1) a = 1;
-    const k2 = fxK[i] > 1 ? 1 : fxK[i];
-    const k1 = tk[i] * (1 - k2);
-    const k0 = 1 - k1 - k2;
-    if (k0 > 0.035) blit(col[i], g, x0, y0, a * k0);
-    if (k1 > 0.035) blit(tc[i], g, x0, y0, a * k1);
-    if (k2 > 0.035) blit(fxC[i], g, x0, y0, a * k2);
-  }
-
-  function flush() {
-    for (let j = 0; j < dirtyCount; j++) {
-      const i = dirtyList[j];
-      dirty[i] = 0;
-      drawCell(i);
+  function flushTile(t) {
+    const g2 = t.g, list = t.list, count = t.count;
+    g2.globalAlpha = 1;
+    let shade = -1;
+    for (let j = 0; j < count; j++) {
+      const i = list[j], c = ccol[i], r = crow[i];
+      if (bgi[i] !== shade) { shade = bgi[i]; g2.fillStyle = bgStyle(shade); }
+      g2.fillRect(dx[c] - t.x, dy[r] - t.y, dx[c + 1] - dx[c], dy[r + 1] - dy[r]);
     }
-    dirtyCount = 0;
+    for (let j = 0; j < count; j++) {
+      const i = list[j];
+      dirty[i] = 0;
+      const g = gl[i];
+      if (!g) continue;
+      const a = al[i] > 1 ? 1 : al[i];
+      if (a < 0.025) continue;
+      const x0 = dx[ccol[i]] - t.x, y0 = dy[crow[i]] - t.y;
+      // Base colour then mood tint, source-over; the base alpha is corrected for the tint covering it.
+      const a1 = a * tk[i];
+      if (a1 < 0.97 && tk[i] < 0.965) blit(g2, col[i], g, x0, y0, (a - a1) / (1 - a1));
+      if (a1 > 0.02) blit(g2, tc[i], g, x0, y0, a1);
+    }
+    t.count = 0;
+  }
+
+  // Repaint up to `max` tiles that have pending changes, continuing where the last frame stopped.
+  function flushSome(max) {
+    const nt = tiles.length;
+    for (let k = 0; k < nt && max > 0; k++) {
+      const t = tiles[(nextTile + k) % nt];
+      if (!t.count) continue;
+      flushTile(t);
+      max--;
+      if (max === 0) { nextTile = (nextTile + k + 1) % nt; return; }
+    }
+  }
+
+  // Hot cells → main canvas, on top of the layer: hide the cached glyph, paint the fx look.
+  function stamp(ctx, ci, g, i, a) {
+    const at = atlases[ci] || atlas(ci);
+    ctx.globalAlpha = a > 1 ? 1 : a;
+    ctx.drawImage(at.canvas, (g - 33) * at.cellW + at.sx0, at.sy0, at.sw, at.sh,
+      (dx[ccol[i]] + at.ox) * U, (dy[crow[i]] + at.oy) * U, at.sw * U, at.sh * U);
+  }
+
+  function paintHot(ctx) {
+    const list = hotA;
+    ctx.globalAlpha = 1;
+    // Hide the cached glyphs: runs of neighbouring cells in one shade become a single rectangle.
+    let shade = -1, run = -1, runEnd = -1;
+    for (let j = 0; j <= hotCount; j++) {
+      const i = j < hotCount ? list[j] : -2;
+      if (i === runEnd + 1 && run >= 0 && bgi[i] === shade && ccol[i] !== 0) { runEnd = i; continue; }
+      if (run >= 0) {
+        const c0 = ccol[run], c1 = ccol[runEnd] + 1, r = crow[run];
+        ctx.fillRect(dx[c0] * U, dy[r] * U, (dx[c1] - dx[c0]) * U, (dy[r + 1] - dy[r]) * U);
+      }
+      if (i < 0) break;
+      if (bgi[i] !== shade) { shade = bgi[i]; ctx.fillStyle = bgStyle(shade); }
+      run = runEnd = i;
+    }
+    for (let j = 0; j < hotCount; j++) {
+      const i = list[j];
+      const g = fxG[i] || gl[i];
+      if (!g) continue;
+      let a = (fxAbs[i] >= 0 ? fxAbs[i] : al[i]) + fxAdd[i];
+      if (a < 0.025) continue;
+      if (a > 1) a = 1;
+      // Three colours (base, mood tint, fx tint) mixed with weights k0 / k1 / k2.  Painted
+      // back to front with plain source-over, so each alpha is corrected for what covers it.
+      const k2 = fxK[i] > 1 ? 1 : fxK[i];
+      const k1 = tk[i] * (1 - k2);
+      const k0 = 1 - k1 - k2;
+      const a2 = a * k2;
+      const a1 = a2 < 0.98 ? (a * k1) / (1 - a2) : 0;
+      if (k0 > 0.06 && a2 < 0.98 && a1 < 0.98) stamp(ctx, col[i], g, i, (a * k0) / ((1 - a1) * (1 - a2)));
+      if (a1 > 0.04) stamp(ctx, tc[i], g, i, a1);
+      if (a2 > 0.04) stamp(ctx, fxC[i], g, i, a2);
+    }
   }
 
   // ------------------------------------------------------------------ fx --
 
   function beginFx() {
     frame++;
-    // Cells that were hot last frame are reset; they repaint once more to return to their base look.
+    // Cells that were hot last frame drop back to their cached base look.
     const prev = hotA;
     for (let j = 0; j < hotCount; j++) {
       const i = prev[j];
       fxK[i] = 0; fxAbs[i] = -1; fxAdd[i] = 0; fxG[i] = 0;
-      markDirty(i);
     }
-    hotA = hotB; hotB = prev; prevCount = hotCount; hotCount = 0;
+    hotA = hotB; hotB = prev; hotCount = 0;
   }
 
   function touch(i) {
     if (hotStamp[i] !== frame) {
       hotStamp[i] = frame;
       hotA[hotCount++] = i;
-      markDirty(i);
     }
   }
 
@@ -447,7 +551,7 @@ export function createField() {
   function hlCheck(sq, t, reduced) {
     const b = block(sq); if (b < 0) return;
     const ctr = L.squareCenter(sq);
-    const R = L.sq * 3.1, lambda = L.sq * 1.3, hz = reduced ? 0.35 : 1.1;
+    const R = L.sq * 2.5, lambda = L.sq * 1.25, hz = reduced ? 0.35 : 1.1;
     const c0 = Math.max(0, Math.floor((ctr.x - R - ox) / cw)), c1 = Math.min(cols - 1, Math.floor((ctr.x + R - ox) / cw));
     const r0 = Math.max(0, Math.floor((ctr.y - R - oy) / ch)), r1 = Math.min(rows - 1, Math.floor((ctr.y + R - oy) / ch));
     for (let r = r0; r <= r1; r++) {
@@ -462,7 +566,7 @@ export function createField() {
         w = w * w;
         const fall = (1 - d / R) ** 1.1;
         const k = (reduced ? 0.5 : 0.95) * w * fall;
-        if (k < 0.04) continue;
+        if (k < 0.09) continue;
         touch(idx);
         if (k > fxK[idx]) { fxK[idx] = k; fxC[idx] = C.DANGER; }
         fxAdd[idx] += 0.4 * w * fall;
@@ -568,7 +672,7 @@ export function createField() {
     const now = env.now;
     for (let i = 0; i < n; i++) {
       const t = now + rnd[i] * within;
-      if (nextT[i] > t && nextT[i] < 1e8) nextT[i] = t;
+      if (nextT[i] > t) nextT[i] = t;
     }
   }
 
@@ -618,8 +722,28 @@ export function createField() {
     if (flashes.length) applyFlashes(reduced);
     if (ripples.length) applyRipples(reduced);
 
-    flush();
-    ctx.drawImage(layer, 0, 0, lw / dpr, lh / dpr);
+    flushSome(TILES_PER_FRAME);
+    const prevAlpha = ctx.globalAlpha;
+    // The cache is in device pixels.  When the context carries the usual "scale by dpr, maybe
+    // translate by a shake" transform, drop to a pure integer translation so every blit is an
+    // unfiltered 1:1 copy (crisper, and much cheaper where canvas is software-rasterised).
+    const tf = ctx.getTransform ? ctx.getTransform() : null;
+    const plain = !!tf && tf.b === 0 && tf.c === 0 && Math.abs(tf.a - dpr) < 1e-4 && Math.abs(tf.d - dpr) < 1e-4;
+    if (plain) ctx.setTransform(1, 0, 0, 1, Math.round(tf.e), Math.round(tf.f));
+    U = plain ? 1 : 1 / dpr;
+    // The tiles are opaque and cover the screen; the void only needs painting in the margin a
+    // screen shake can expose (off-canvas, so free, when nothing shakes).
+    const m = 64 * dpr * U, gx0 = dx[0] * U, gy0 = dy[0] * U, gx1 = dx[cols] * U, gy1 = dy[rows] * U;
+    ctx.fillStyle = PAL.bg;
+    ctx.fillRect(gx0 - m, gy0 - m, gx1 - gx0 + m * 2, m);
+    ctx.fillRect(gx0 - m, gy1, gx1 - gx0 + m * 2, m);
+    ctx.fillRect(gx0 - m, gy0, m, gy1 - gy0);
+    ctx.fillRect(gx1, gy0, m, gy1 - gy0);
+    if (plain) for (const tl of tiles) ctx.drawImage(tl.canvas, tl.x, tl.y);
+    else for (const tl of tiles) ctx.drawImage(tl.canvas, tl.x * U, tl.y * U, tl.w * U, tl.h * U);
+    if (hotCount) paintHot(ctx);
+    if (plain) ctx.setTransform(tf);
+    ctx.globalAlpha = prevAlpha;
     drawLabels(ctx, view, t);
   }
 
@@ -653,6 +777,9 @@ export function createField() {
   return {
     C,
     resize, update, draw, hurry,
+    flush() { if (L && env.p) flushSome(tiles.length); },
+    // 0..~0.8: how much the baked vignette darkens the point (x, y); scenery dims itself to match.
+    vignetteAt(x, y) { return L ? vignetteAt(x, y) : 0; },
     ripple(x, y, strength = 1, color) {
       if (!L || !Number.isFinite(x) || !Number.isFinite(y)) return;
       const s = clamp(+strength || 1, 0.1, 3);
@@ -681,6 +808,6 @@ export function createField() {
         }
       }
     },
-    stats: () => ({ cells: n, hot: hotCount, ripples: ripples.length, flashes: flashes.length, colors: colors.length }),
+    stats: () => ({ cells: n, tiles: tiles.length, hot: hotCount, ripples: ripples.length, flashes: flashes.length, colors: colors.length }),
   };
 }

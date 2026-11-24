@@ -11,7 +11,7 @@
 
 import { PAL } from '../core/palette.js';
 import { TAU, clamp, FILES } from '../core/util.js';
-import { createSprites } from './sprites.js';
+import { createSprites, TUNE } from './sprites.js';
 import { createFx } from './fx.js';
 import { Seq, rest, buildMove, buildIntro, buildMate, buildDraw } from './choreo.js';
 
@@ -68,8 +68,8 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
   function idleYaw(a, type) {
     const c = a.clock;
     switch (type) {
-      case 'n': return (a.color === 'w' ? 0.5 : Math.PI - 0.5) + 0.36 * Math.sin(c * 0.62 + a.phase);
-      case 'b': return -0.35 + 0.55 * Math.sin(c * 0.5 + a.phase);
+      case 'n': return (a.color === 'w' ? 0.22 : Math.PI - 0.22) + 0.3 * Math.sin(c * 0.62 + a.phase);
+      case 'b': return -0.3 + 0.5 * Math.sin(c * 0.5 + a.phase);
       case 'k': return 0.42 * Math.sin(c * 0.45 + a.phase);
       default: return a.phase + c * IDLE_TURN;
     }
@@ -111,7 +111,7 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
 
     // selected pieces spin up; released ones unwind to their idle facing
     const per = sprites.period(a.showType || a.type);
-    if (selected && !reduced) {
+    if (selected && !dragging && !reduced) {
       a.spinVel += (3.6 - a.spinVel) * (1 - Math.exp(-dt * 5));
       a.spin += a.spinVel * dt;
     } else if (a.spin || a.spinVel) {
@@ -147,7 +147,8 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
     const bm = sprites.bitmap(type, a.color, sprites.index(type, a.yaw));
     const lift = a.vlift;
     const up = 1 + a.sel * 0.05 + a.drag * 0.06;
-    const sx = a.sx * up, sy = a.sy * up * (1 + a.breath * 0.011 * a.alive);
+    // only the side to move breathes; the waiting side holds still (and blits 1:1)
+    const sx = a.sx * up, sy = a.sy * up * (a.alive > 0.75 ? 1 + a.breath * TUNE.breath : 1);
     const lean = a.lean + a.leanV;
     if (lift > 1.5) {
       const k = clamp(lift / (layout.sq * 1.6));

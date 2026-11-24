@@ -8,6 +8,7 @@
 //   1-5  mood: title calm check mate draw   f  flip board
 //   r  ripple at pointer   R  strong warm ripple   x  flash square under pointer
 //   p  mock pieces   g  panel outlines   m  reduced motion   space  pause   h  help
+//   k  screen-shake burst (the translate main applies from pieces.shake)
 //   click = ripple, shift-click = flash
 //
 // URL params: ?hud=0 hides the help, ?pieces=0 hides the mock pieces, ?mood=title, ?dpr=2
@@ -61,6 +62,7 @@ const dev = {
   pieces: params.get('pieces') !== '0', outlines: false, hud: params.get('hud') !== '0',
   pointer: { x: innerWidth / 2, y: innerHeight / 2 },
   mood: params.get('mood') || 'calm',
+  shake: 0, shakeX: 0, shakeY: 0,
 };
 
 // ------------------------------------------------------------------ layout --
@@ -130,13 +132,19 @@ function tick(dt) {
   const t0 = performance.now();
   world.update(dt, view);
   const t1 = performance.now();
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // main.js translates by pieces.shake for world.draw / pieces.draw / world.drawOverlay
+  if (dev.shake > 0) {
+    dev.shake = Math.max(0, dev.shake - dt);
+    dev.shakeX = (Math.random() - 0.5) * 22 * dev.shake; dev.shakeY = (Math.random() - 0.5) * 22 * dev.shake;
+  } else { dev.shakeX = dev.shakeY = 0; }
+  ctx.setTransform(dpr, 0, 0, dpr, dev.shakeX * dpr, dev.shakeY * dpr);
   world.draw(ctx, view);
   const t2 = performance.now();
   if (dev.pieces) drawMockPieces();
   const t3 = performance.now();
   world.drawOverlay(ctx, view);
   const t4 = performance.now();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (dev.outlines) drawOutlines();
   return [t1 - t0, t2 - t1, t4 - t3];
 }
@@ -196,6 +204,7 @@ const actions = {
   p() { dev.pieces = !dev.pieces; },
   g() { dev.outlines = !dev.outlines; },
   m() { view.reducedMotion = !view.reducedMotion; },
+  k() { dev.shake = 0.6; world.ripple(dev.pointer.x, dev.pointer.y, 2); },
   h() { dev.hud = !dev.hud; help.classList.toggle('hidden', !dev.hud); bar.classList.toggle('hidden', !dev.hud); },
   ' '() { dev.paused = !dev.paused; },
 };
@@ -218,7 +227,7 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 const BUTTONS = [['s', 'select'], ['t', 'targets'], ['l', 'last'], ['c', 'check'], ['1', 'title'], ['2', 'calm'], ['3', 'check mood'], ['4', 'mate'], ['5', 'draw'],
-  ['r', 'ripple'], ['R', 'RIPPLE'], ['x', 'flash'], ['f', 'flip'], ['p', 'pieces'], ['g', 'panels'], ['m', 'reduced'], ['h', 'hide']];
+  ['r', 'ripple'], ['R', 'RIPPLE'], ['x', 'flash'], ['f', 'flip'], ['k', 'shake'], ['p', 'pieces'], ['g', 'panels'], ['m', 'reduced'], ['h', 'hide']];
 for (const [k, label] of BUTTONS) {
   const b = document.createElement('button');
   b.textContent = label;
@@ -235,7 +244,7 @@ function renderHelp() {
     `ms/frame  update ${f(p.update.mean)}  draw ${f(p.draw.mean)}  overlay ${f(p.overlay.mean)}  <b>draw+overlay ${f(p.drawPlusOverlay)}</b> (p95 ${f(p.draw.p95 + p.overlay.p95)})  frame ${f(p.frame.mean)}\n` +
     `hot cells ${p.stats.hot}  ripples ${p.stats.ripples}  colours ${p.stats.colors}\n` +
     `s select  t targets  l last move  c check  1-5 moods  f flip  r/R ripple  x flash\n` +
-    `p pieces  g panels  m reduced motion  space pause  h hide   click ripple  shift-click flash`;
+    `k shake  p pieces  g panels  m reduced motion  space pause  h hide   click ripple  shift-click flash`;
 }
 
 // --------------------------------------------------------------------- go --
