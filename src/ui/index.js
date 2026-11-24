@@ -12,6 +12,7 @@ import { createInput } from './input.js';
 import { drawHud } from './hud.js';
 import { drawTitle, menuKey, resetTitle } from './menu.js';
 import { drawPromotion, drawGameOver, promoKey, promoClosed, rematch } from './modal.js';
+import { drawSettings, settingsKey, settingsOpen, openSettings } from './settings.js';
 
 function historyOf(view) {
   try {
@@ -36,7 +37,7 @@ export function createUI({ bus, canvas }) {
     K.phaseT = Math.max(0, (view.t || 0) - phaseT0);
     K.alpha = view.reducedMotion ? 1 : ease.outCubic(clamp(K.phaseT / 0.6));
     if (!view.promotion) promoClosed();
-    K.modal = view.phase === 'title' || view.phase === 'gameover' || !!view.promotion;
+    K.modal = view.phase === 'title' || view.phase === 'gameover' || !!view.promotion || settingsOpen();
   }
 
   function onKey(e) {
@@ -46,7 +47,9 @@ export function createUI({ bus, canvas }) {
     const k = e.key, lk = k.length === 1 ? k.toLowerCase() : k;
     if (lk === 'm') { if (!e.repeat) bus.emit('ui:mute'); return true; }
     if (e.repeat && lk !== 'ArrowUp' && lk !== 'ArrowDown' && lk !== 'ArrowLeft' && lk !== 'ArrowRight') return true;
+    if (settingsOpen()) return settingsKey(k);
     if (view.promotion) return promoKey(k);
+    if (lk === 's') { openSettings(); return true; }
     if (view.phase === 'title') return menuKey(k);
     if (lk === 'Escape') { bus.emit('ui:menu'); return true; }
     if (lk === 'u') { bus.emit('ui:undo'); return true; }
@@ -84,6 +87,7 @@ export function createUI({ bus, canvas }) {
         if (view.phase === 'gameover') drawGameOver(view);
         if (view.promotion) drawPromotion(view);
       }
+      if (settingsOpen()) drawSettings(view);
       ctx.restore();
       input.refresh();
     },

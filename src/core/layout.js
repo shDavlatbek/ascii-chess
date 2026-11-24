@@ -10,7 +10,7 @@ import { sqFile, sqRank, sqName } from './util.js';
 export const SQ_COLS = 6;
 export const SQ_ROWS = 3;
 
-export function computeLayout(W, H, dpr = 1, flipped = false) {
+export function computeLayout(W, H, dpr = 1, flipped = false, { fineScale = 1 } = {}) {
   const portrait = H > W * 1.12;
 
   // Square size: leave room for side panels (landscape) or top/bottom panels
@@ -64,7 +64,10 @@ export function computeLayout(W, H, dpr = 1, flipped = false) {
 
     // Pieces: the tallest piece (king) stands this tall; feet sit at pieceFoot().
     pieceH: sq * 1.36,
-    fineW: Math.max(3, sq / 17),            // suggested fine-glyph cell width for sculptures
+    // Suggested fine-glyph cell width for sculptures.  fineScale < 1 (the
+    // FIGURES setting) packs more, smaller glyphs into each piece.
+    fineScale,
+    fineW: Math.max(2, (sq / 17) * fineScale),
 
     // HUD regions.  landscape: a = left, b = right.  portrait: a = top, b = bottom.
     panels,

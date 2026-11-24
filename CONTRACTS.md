@@ -62,6 +62,14 @@ view = {
   thinking: false,            // AI is searching
   muted: false,
   reducedMotion: false,
+  settings: {                 // player settings, saved in localStorage by main
+    figures: 'standard' | 'high' | 'ultra',   // glyph density of the pieces (via layout.fineScale / fineW)
+    boardFlow: true,          // false: the field's glyphs and bands stand still
+    ripples: true,            // false: world.ripple() / world.flash() do nothing
+    scenery: true,            // false: no rain, vines or embers
+    shake: true,              // false: main ignores pieces.shake
+    idleSpin: true,           // false: pieces stop turning and breathing while idle
+  },
 }
 ```
 
@@ -167,6 +175,7 @@ square event. Main owns the selection / move logic.
 | `ui:undo` `ui:flip` `ui:mute` `ui:menu` | – | ui → main |
 | `ui:promote` | `{ piece }` (`'q' 'r' 'b' 'n'`) | ui → main |
 | `ui:promoteCancel` | – | ui → main |
+| `ui:setting` | `{ key, value }` — a `view.settings` key, or `'sound'` with a boolean | ui → main (main stores, applies and saves it) |
 | `sfx` | `{ name, intensity? }` | anyone → ui audio |
 | `game:start` | `{ config }` | main → all |
 | `game:move` | `{ move }` | main → all (after the engine applied it, before the animation) |

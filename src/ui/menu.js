@@ -5,6 +5,7 @@
 import { PAL } from '../core/palette.js';
 import { clamp, hash2 } from '../core/util.js';
 import { K, adv, text, glyph, widget, btn, scr } from './kit.js';
+import { openSettings } from './settings.js';
 
 const FONT = {
   A: [' ### ', '#   #', '#####', '#   #', '#   #'],
@@ -216,12 +217,12 @@ export function drawTitle(view) {
 
   if (g.hint) {
     ctx.globalAlpha = clamp((t - 1.4) / 0.5);
-    text('ARROWS SELECT   ENTER START', cx, scy + g.startH / 2 + mf * 0.9, 11, PAL.textFaint, { align: 'c', adv: adv(11) * 1.2 });
+    text('ARROWS SELECT   ENTER START   S SETTINGS', cx, scy + g.startH / 2 + mf * 0.9, 11, PAL.textFaint, { align: 'c', adv: adv(11) * 1.2 });
     ctx.globalAlpha = 1;
   }
 
-  // sound toggle, bottom-right
-  const lbl = view.muted ? 'SOUND OFF' : 'SOUND ON', bs = 11, bwid = (lbl.length + 4) * adv(bs);
+  // settings, bottom-right (sound lives in there; M still toggles it)
+  const lbl = 'SETTINGS', bs = Math.max(11, Math.round(mf * 0.62)), bwid = (lbl.length + 4) * adv(bs);
   const pad = Math.max(8, Math.min(W, H) * 0.02);
-  btn('mute', lbl, W - pad - bwid, H - pad - 15, bs, { action: () => K.bus.emit('ui:mute') });
+  btn('settings', lbl, W - pad - bwid, H - pad - 15, bs, { action: openSettings });
 }

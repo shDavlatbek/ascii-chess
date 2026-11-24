@@ -22,7 +22,17 @@ plain ES modules loaded from `index.html`.
 ## Controls
 
 Click a piece then a square, or drag and drop. `U` undo, `F` flip the board,
-`M` mute, `Esc` menu. Add `?fps` to the URL for a frame-time readout.
+`M` mute, `S` settings, `Esc` menu. Add `?fps` to the URL for a frame-time readout.
+
+## Settings
+
+Open with `S` or the SETTINGS button. Choices are saved in the browser.
+
+- **Figures** — Standard / High / Ultra: sculpt each piece from more, smaller glyphs.
+- **Board flow** — off freezes the glyphs under and around the board.
+- **Ripples** — off removes the rings and flashes from moves and kills.
+- **Rain + embers** — off removes falling strands and drifting sparks.
+- **Screen shake**, **Idle spin**, **Sound** — on or off.
 
 ## Tests
 

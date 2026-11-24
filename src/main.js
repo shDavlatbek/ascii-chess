@@ -21,6 +21,38 @@ const DEMO_MAX_PLIES = 140;
 const AI_MIN_THINK = 0.45;         // seconds — an instant reply feels wrong
 
 const bus = createBus();
+
+// Player settings, saved in the browser.  See CONTRACTS.md ("Settings").
+const SETTINGS_KEY = 'ascii-chess:settings';
+const FINE_SCALE = { standard: 1, high: 0.8, ultra: 0.62 };
+const DEFAULT_SETTINGS = {
+  figures: 'standard',     // 'standard' | 'high' | 'ultra' — glyph density of the pieces
+  boardFlow: true,         // the field's glyphs keep changing
+  ripples: true,           // rings and flashes on the board from moves and kills
+  scenery: true,           // rain, vines and embers
+  shake: true,             // screen shake on impacts
+  idleSpin: true,          // pieces turn and breathe while waiting
+};
+function loadSaved() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch { return {}; }
+}
+function cleanSettings(raw) {
+  const out = { ...DEFAULT_SETTINGS };
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    if (key === 'figures') { if (raw.figures in FINE_SCALE) out.figures = raw.figures; }
+    else if (typeof raw[key] === 'boolean') out[key] = raw[key];
+  }
+  return out;
+}
+const saved = loadSaved();
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...view.settings, muted: view.muted }));
+  } catch { /* storage unavailable: settings last for this visit only */ }
+}
 const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
 const view = {
@@ -42,8 +74,9 @@ const view = {
   captured: { w: [], b: [] },
   busy: false,
   thinking: false,
-  muted: false,
+  muted: saved.muted === true,
   reducedMotion: !!motionQuery?.matches,
+  settings: cleanSettings(saved),
 };
 motionQuery?.addEventListener?.('change', (e) => { view.reducedMotion = e.matches; });
 
@@ -68,7 +101,7 @@ function resize() {
   const H = Math.max(240, window.innerHeight);
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
-  view.layout = computeLayout(W, H, dpr, flipped);
+  view.layout = computeLayout(W, H, dpr, flipped, { fineScale: FINE_SCALE[view.settings.figures] });
   world.resize(view.layout);
   pieces.resize(view.layout);
   ui.resize(view.layout);
@@ -343,7 +376,21 @@ bus.on('ui:newGame', (config) => {
 });
 bus.on('ui:undo', undo);
 bus.on('ui:flip', () => { if (view.phase !== 'title') setFlipped(!flipped); });
-bus.on('ui:mute', () => { view.muted = !view.muted; });
+bus.on('ui:mute', () => { view.muted = !view.muted; saveSettings(); });
+bus.on('ui:setting', ({ key, value } = {}) => {
+  if (key === 'sound') {
+    view.muted = !value;
+  } else if (key === 'figures') {
+    if (!(value in FINE_SCALE) || value === view.settings.figures) return;
+    view.settings.figures = value;
+    resize();                // rebuilds the layout, so the pieces re-sculpt themselves
+  } else if (key in DEFAULT_SETTINGS && typeof value === 'boolean') {
+    view.settings[key] = value;
+  } else {
+    return;
+  }
+  saveSettings();
+});
 bus.on('ui:menu', () => { if (view.phase !== 'title') startDemo(); });
 
 // ------------------------------------------------------------------ loop --
@@ -377,7 +424,7 @@ function frame(now) {
   ctx.fillStyle = PAL.bg;
   ctx.fillRect(0, 0, layout.W, layout.H);
 
-  const shake = view.reducedMotion ? null : pieces.shake;
+  const shake = view.reducedMotion || !view.settings.shake ? null : pieces.shake;
   ctx.save();
   if (shake && (shake.x || shake.y)) ctx.translate(shake.x, shake.y);
   guard('world.draw', () => world.draw(ctx, view));

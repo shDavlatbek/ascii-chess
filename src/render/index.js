@@ -30,6 +30,7 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
   const ghosts = [];               // captured pieces still on screen until they shatter
   let seq = null, seqTimer = 0;
   let reduced = false;
+  let idleOn = true, idleAmp = 1;    // IDLE SPIN setting, eased so it never snaps
   let clock = 0;
   let uid = 1;
 
@@ -77,9 +78,9 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
   function idleYaw(a, type) {
     const c = a.clock;
     switch (type) {
-      case 'n': return (a.color === 'w' ? 0.22 : Math.PI - 0.22) + 0.3 * Math.sin(c * 0.62 + a.phase);
-      case 'b': return -0.3 + 0.5 * Math.sin(c * 0.5 + a.phase);
-      case 'k': return 0.42 * Math.sin(c * 0.45 + a.phase);
+      case 'n': return (a.color === 'w' ? 0.22 : Math.PI - 0.22) + 0.3 * idleAmp * Math.sin(c * 0.62 + a.phase);
+      case 'b': return -0.3 + 0.5 * idleAmp * Math.sin(c * 0.5 + a.phase);
+      case 'k': return 0.42 * idleAmp * Math.sin(c * 0.45 + a.phase);
       default: return a.phase + c * IDLE_TURN;
     }
   }
@@ -107,8 +108,8 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
     const playing = !view || view.phase !== 'gameover';
     const mine = !view || view.phase === 'title' || view.turn === a.color;
     a.alive = playing ? (mine ? 1 : 0.5) : 0.35;
-    a.clock += dt * a.alive;
-    a.breath = Math.sin(a.clock * 1.9 + a.phase * 3);
+    a.clock += dt * a.alive * idleAmp;
+    a.breath = Math.sin(a.clock * 1.9 + a.phase * 3) * idleAmp;
 
     const dragging = !!(view && view.drag && view.drag.from === a.sq && !a.busy);
     const selected = !!(view && view.selected === a.sq && !a.busy) || dragging;
@@ -227,7 +228,9 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
     trail(a, frac) {
       const type = a.showType || a.type;
       const x0 = a.vx, y0 = a.vy - a.vlift;
-      const f = reduced ? frac * 0.4 : frac;
+      // denser sculptures shed proportionally fewer ghosts, so trails cost the same
+      const dens = (layout.fineScale || 1) ** 2;
+      const f = (reduced ? frac * 0.4 : frac) * dens;
       sprites.forEachCell(type, sprites.index(type, a.yaw), (cx, cy, code, shade) => {
         if (fx.rnd() < f) fx.ghost(x0 + cx, y0 + cy, code, a.color, Math.min(5, SHADE[a.color][shade] + 1), 0.2 + fx.rnd() * 0.12, 0.6);
       });
@@ -276,6 +279,7 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
   function note(view) {
     if (!view) return;
     reduced = !!view.reducedMotion;
+    idleOn = !(view.settings && view.settings.idleSpin === false);
     if (view.layout && view.layout !== layout) resize(view.layout);
   }
 
@@ -361,6 +365,8 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
     if (!layout) return;
     if (!(dt >= 0)) dt = 0;
     clock += dt;
+    idleAmp += ((idleOn ? 1 : 0) - idleAmp) * (1 - Math.exp(-dt * 4));
+    if (Math.abs((idleOn ? 1 : 0) - idleAmp) < 0.002) idleAmp = idleOn ? 1 : 0;
     const sdt = dt * fx.timeScale(dt);
     if (seq) seq.advance(sdt * (reduced ? 1.7 : 1));
     fx.update(sdt, dt);

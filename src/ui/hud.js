@@ -5,6 +5,7 @@
 import { PAL, SIDE_NAME } from '../core/palette.js';
 import { clamp } from '../core/util.js';
 import { K, adv, text, scr, wrap, bodySize, btnFlow, drawFlow, resultInfo } from './kit.js';
+import { openSettings } from './settings.js';
 
 const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const ORDER = 'qrbnp';
@@ -153,7 +154,7 @@ export function drawHud(view, hist) {
   const items = [
     { id: 'undo', label: 'UNDO', enabled: hist.length > 0, action: () => K.bus.emit('ui:undo') },
     { id: 'flip', label: 'FLIP', action: () => K.bus.emit('ui:flip') },
-    { id: 'mute', label: view.muted ? 'SOUND OFF' : 'SOUND ON', action: () => K.bus.emit('ui:mute') },
+    { id: 'settings', label: 'SETTINGS', action: openSettings },
     { id: 'menu', label: 'MENU', action: () => K.bus.emit('ui:menu') },
   ];
   const cardH = cardHeight(fs, ns), h1 = Math.round(ns * 1.55);
