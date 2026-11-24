@@ -23,7 +23,7 @@ function material(view) {
 
 function statusInfo(view) {
   const cfg = view.config || {};
-  if (view.phase === 'gameover') {
+  if (view.phase === 'gameover' || (view.status && view.status !== 'playing')) {
     const r = resultInfo(view);
     return { s: r.line, c: r.sub && view.winner ? PAL.warm[1] : PAL.textDim };
   }
