@@ -63,7 +63,7 @@ export function computeLayout(W, H, dpr = 1, flipped = false) {
     sqCols: SQ_COLS, sqRows: SQ_ROWS,
 
     // Pieces: the tallest piece (king) stands this tall; feet sit at pieceFoot().
-    pieceH: sq * 1.5,
+    pieceH: sq * 1.36,
     fineW: Math.max(3, sq / 17),            // suggested fine-glyph cell width for sculptures
 
     // HUD regions.  landscape: a = left, b = right.  portrait: a = top, b = bottom.

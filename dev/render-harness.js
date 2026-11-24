@@ -2,8 +2,10 @@
 //
 //   node tools/serve.mjs 8101   →   http://localhost:8101/dev/render.html
 //
-// URL params:  ?scene=start|lineup|empty   &field=0..1 (mock field strength)
-//              &ui=0 (hide the panel)      &manual=1 (no rAF loop; drive with H.step)
+// URL params:  ?scene=start|lineup|empty|<fen>   &field=0..1 (mock field strength)
+//              &ui=0 (hide the panel)   &rm=1 (reduced motion)   &fxworld=0 (mute mock ripple/flash)
+//              &manual=1 (no rAF loop, no watchdog; drive with H.step(dt, n))   &watchdog=1
+//              tuning: &fineK= &fontK= &weight= &under= &breath= &pieceH=<squares>
 // Keys: 1-6 kills (p n b r q k), q w e r t y quiet moves, c castle, x en passant,
 //       p promotion, m mate, s stalemate, n new game, f flip, space select, d demo.
 // Everything is also on window.H for Playwright.

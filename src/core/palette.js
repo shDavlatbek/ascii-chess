@@ -18,7 +18,7 @@ export const PAL = {
   warm: ['#fbe3bd', '#f6cf9a', '#f2b56b', '#e0914a', '#b46a38', '#7a4a2e'],
 
   // Armies
-  bone: ['#fffdf7', '#f1ede4', '#d5d0c8', '#aaa6a2', '#7c7a7c', '#55545c'],   // "white" side, lit → shadow
+  bone: ['#ffffff', '#f9f6ef', '#e9e5dd', '#cdc9c6', '#a5a3a8', '#7b7a86'],   // "white" side, lit → shadow
   ember: ['#fff0c8', '#ffd08a', '#ffab5c', '#f08040', '#b8552f', '#6e3524'],  // "black" side, lit → shadow
 
   // Effects

@@ -14,7 +14,7 @@ import { TAU, clamp, FILES } from '../core/util.js';
 import { createSprites, TUNE, SHADE } from './sprites.js';
 import { getModel } from './sculpt.js';
 import { createFx } from './fx.js';
-import { Seq, rest, buildMove, buildIntro, buildMate, buildDraw } from './choreo.js';
+import { rest, buildMove, buildIntro, buildMate, buildDraw } from './choreo.js';
 
 const IDLE_TURN = 0.42;            // rad/s for the freely turning lathe pieces
 
@@ -389,5 +389,3 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
     get debug() { return { actors: actors.length, ghosts: ghosts.length, particles: fx.count, ...sprites.stats }; },
   };
 }
-
-export { Seq };
