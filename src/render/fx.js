@@ -32,7 +32,7 @@ export function createFx() {
   function configure(metrics) {
     M = metrics;
     const { fontPx, dpr } = M;
-    const mk = (pal, k) => pal.map((color) => getAtlas({ fontPx: Math.round(fontPx * k * 4) / 4, color, dpr }));
+    const mk = (pal, k) => pal.map((color) => getAtlas({ fontPx: Math.round(fontPx * k * 4) / 4, color, dpr, weight: M.weight || 700 }));
     atl = {
       w: [mk(PAL.bone, 1), mk(PAL.bone, 1.5)],
       b: [mk(PAL.ember, 1), mk(PAL.ember, 1.5)],

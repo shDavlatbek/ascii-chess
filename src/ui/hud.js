@@ -44,6 +44,19 @@ function drawStatus(info, x, cy, maxW, size) {
   });
 }
 
+// Soft dark backing so text stays legible where scenery drifts behind it.
+function scrim(x, y, w, h, strength = 1) {
+  if (w <= 0 || h <= 0) return;
+  const ctx = K.ctx;
+  ctx.save();
+  ctx.fillStyle = PAL.bgDeep;
+  for (const [pad, alpha] of [[20, 0.22], [11, 0.3], [3, 0.42]]) {
+    ctx.globalAlpha = alpha * strength;
+    ctx.fillRect(x - pad, y - pad, w + pad * 2, h + pad * 2);
+  }
+  ctx.restore();
+}
+
 const cardHeight = (fs, ns) => Math.round(ns * 1.55) + Math.round(fs * 1.6);
 
 function card(side, x, y, w, view, fs, ns, compact) {
@@ -150,6 +163,9 @@ export function drawHud(view, hist) {
     const minW = fs * 10;
     if (A.w >= minW) {
       const cw = Math.min(A.w, Math.round(fs * 22)), x = A.x + A.w - cw;
+      scrim(x, bd.y, cw, cardH);
+      scrim(x, bd.y + bd.size - cardH, cw, cardH);
+      scrim(x + adv(ns) * 2, bd.y + bd.size / 2 - ss, Math.min(cw - adv(ns) * 2, adv(ss) * (info.s.length + 3)), ss * 2);
       card(top, x, bd.y, cw, view, fs, ns);
       card(bot, x, bd.y + bd.size - cardH, cw, view, fs, ns);
       drawStatus(info, x + adv(ns) * 2, bd.y + bd.size / 2, cw - adv(ns) * 2, ss);
@@ -162,7 +178,11 @@ export function drawHud(view, hist) {
       text('MOVES', x, bd.y + fs * 0.9, fs, PAL.textFaint, { adv: adv(fs) * 1.3 });
       if (hist.length) text(String(hist.length), x + cw, bd.y + fs * 0.9, fs, PAL.textFaint, { align: 'r' });
       const ly = bd.y + fs * 2.2;
-      drawList(hist, x, ly, cw, yb - fs * 0.6 - ly, fs);
+      const listH = yb - fs * 0.6 - ly, pitch = Math.round(fs * 1.55);
+      const shown = Math.max(1, Math.min(Math.floor(listH / pitch), Math.ceil(hist.length / 2)));
+      scrim(x, bd.y, Math.min(cw, adv(fs) * 22), ly - bd.y + shown * pitch);
+      scrim(x, yb, Math.min(cw, Math.max(...flow.rows.map((r) => r.w))), flow.h);
+      drawList(hist, x, ly, cw, listH, fs);
       drawFlow(flow, x, yb, cw, 'l');
     }
     return;
@@ -173,6 +193,8 @@ export function drawHud(view, hist) {
   // top strip: list (top) / status / card (docked to the board)
   let free = A.h;
   const cardTop = A.y + A.h - cardH;
+  scrim(x, A.y, w, A.h, 0.8);
+  scrim(x, B.y, w, B.h, 0.8);
   if (A.h >= cardH) { card(top, x, cardTop, w, view, fs, ns); free = cardTop - A.y - 4; }
   else if (A.h >= h1) { card(top, x, A.y + A.h - h1, w, view, fs, ns, true); free = 0; }
   const statusH = Math.round(ss * 1.9);

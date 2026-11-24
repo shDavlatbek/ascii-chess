@@ -39,7 +39,8 @@ export function computeLayout(W, H, dpr = 1, flipped = false) {
   const panels = portrait
     ? {
         a: { x: pad, y: pad, w: W - pad * 2, h: Math.max(0, by - sq * 0.55 - pad) },
-        b: { x: pad, y: by + size + gap * 0.6, w: W - pad * 2, h: Math.max(0, H - (by + size + gap * 0.6) - pad) },
+        // Starts below the row of file labels that sits under the board.
+        b: { x: pad, y: by + size + ch * 1.6, w: W - pad * 2, h: Math.max(0, H - (by + size + ch * 1.6) - pad) },
       }
     : {
         a: { x: pad, y: pad, w: Math.max(0, bx - gap - pad), h: H - pad * 2 },

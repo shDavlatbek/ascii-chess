@@ -12,12 +12,17 @@ import { TAU } from '../core/util.js';
 import { ASPECT, SX, SY, STEP, TILT, SHAPE, frameCount, gridBox, renderCells } from './sculpt.js';
 
 export const ARMY = { w: PAL.bone, b: PAL.ember };
+// Shade index (0 lit .. 5 shadow) → palette entry.  Bone is lifted a step so
+// the "white" army reads white rather than grey; ember keeps its full range.
+export const SHADE = { w: [0, 1, 1, 2, 3, 4], b: [0, 1, 2, 3, 4, 5] };
 // Tunables (the dev harness pokes these via ?fineK= & ?fontK=).
 export const TUNE = {
   fineK: 0.8,                      // our fine cell vs the layout's suggested fineW
   fontK: 0,                        // font px per fine cell width (0 = automatic, ~1.7–1.86)
   weight: 0,                       // 0 = automatic
   breath: 0.011,                   // idle breathing: vertical scale amplitude
+  under: -1,                       // alpha of the '#' underlay beneath every glyph (-1 = automatic)
+  shade: null,                     // override SHADE (dev)
 };
 const BACKING = '#0b0b11';         // the occluding body behind the glyphs
 
@@ -51,7 +56,7 @@ export function createSprites() {
     const aspect = fh / fw;
     // low-dpi: keep glyphs just inside their cell or they smear into a mesh
     const fontPx = Math.round(fw * (TUNE.fontK || (dpr >= 1.75 ? 1.86 : 1.7)) * 4) / 4;
-    const k = `${res}|${fw.toFixed(3)}|${fontPx}|${dpr}|${TUNE.weight}|${TUNE.fontK}`;
+    const k = `${res}|${fw.toFixed(3)}|${fontPx}|${dpr}|${TUNE.weight}|${TUNE.fontK}|${TUNE.under}`;
     if (M && (Math.abs(M.res - res) > 1e-6 || Math.abs(M.aspect - aspect) > 1e-6)) cellCache.clear();
     if (k !== key) { bitmaps.clear(); key = k; for (const t in boxes) delete boxes[t]; }
     // tiny glyphs clog at bold weight; lighten them so they stay glyphs
@@ -117,10 +122,27 @@ export function createSprites() {
         }
       }
     }
-    // 2. glyphs, shadow shades first so lit glyphs overlap on top
-    const pal = ARMY[color];
+    // 2. underlay: a faint '#' in every cell, one shade down, so the body reads
+    //    as solid, coloured stone even where the glyph on top is a thin one
+    const pal = ARMY[color], map = TUNE.shade ? TUNE.shade[color] : SHADE[color];
+    // (stronger on low-dpi screens, where thin glyph strokes alone look grey)
+    const under = TUNE.under >= 0 ? TUNE.under : dpr >= 1.75 ? 0.12 : 0.32;
+    if (under > 0) {
+      g.globalAlpha = under;
+      for (let s = 5; s >= 0; s--) {
+        const atlas = getAtlas({ fontPx, color: pal[Math.min(5, map[s] + 1)], dpr, weight: M.weight });
+        const hw = atlas.w / 2, hh = atlas.h / 2;
+        for (let n = 0; n < c.n; n++) {
+          if (c.shade[n] !== s || !c.code[n]) continue;
+          const x = b.pad + (c.col[n] + 0.5) * fw, y = b.pad + (c.row[n] + 0.5) * fh;
+          atlas.drawCode(g, 35, Math.round((x - hw) * dpr) / dpr + hw, Math.round((y - hh) * dpr) / dpr + hh);
+        }
+      }
+      g.globalAlpha = 1;
+    }
+    // 3. glyphs, shadow shades first so lit glyphs overlap on top
     for (let s = 5; s >= 0; s--) {
-      const atlas = getAtlas({ fontPx, color: pal[s], dpr, weight: M.weight });
+      const atlas = getAtlas({ fontPx, color: pal[map[s]], dpr, weight: M.weight });
       // snap each glyph's atlas cell to whole device pixels so it stays crisp
       const hw = atlas.w / 2, hh = atlas.h / 2;
       for (let n = 0; n < c.n; n++) {

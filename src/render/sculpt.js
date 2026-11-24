@@ -313,9 +313,9 @@ function buildKing() {
   lathe(c, p, { tex: g });
   // the cross
   // the cross: tall and bold enough to survive a dozen glyph columns
-  box(c, 0, 0.965, 0, 0.03, 0.1, 0.028, 1.1);
-  box(c, 0, 0.985, 0, 0.095, 0.03, 0.028, 1.1);
-  return finish(c, { h: 1.065, order: 2 });
+  box(c, 0, 0.975, 0, 0.023, 0.11, 0.026, 1.1);
+  box(c, 0, 0.995, 0, 0.1, 0.025, 0.026, 1.1);
+  return finish(c, { h: 1.085, order: 2 });
 }
 
 // Horse head: a silhouette in the x/y plane (nose toward -x), inflated into a
@@ -473,7 +473,7 @@ export const SHAPE = {
   n: { h: 0.785 * 0.92, r: 0.24, order: 1 },
   b: { h: 0.82 * 0.93, r: 0.20, order: 1 },
   q: { h: 0.91 * 0.98, r: 0.222, order: 6 },
-  k: { h: 1.065, r: 0.228, order: 2 },
+  k: { h: 1.085, r: 0.228, order: 2 },
 };
 export const frameCount = (type) => Math.round(TAU / SHAPE[type].order / STEP);
 

@@ -11,7 +11,8 @@
 
 import { PAL } from '../core/palette.js';
 import { TAU, clamp, FILES } from '../core/util.js';
-import { createSprites, TUNE } from './sprites.js';
+import { createSprites, TUNE, SHADE } from './sprites.js';
+import { getModel } from './sculpt.js';
 import { createFx } from './fx.js';
 import { Seq, rest, buildMove, buildIntro, buildMate, buildDraw } from './choreo.js';
 
@@ -31,6 +32,14 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
   let reduced = false;
   let clock = 0;
   let uid = 1;
+
+  // Build the six point-cloud models ahead of the first game, one per tick, so
+  // the first frame with pieces on it doesn't pay for all of them at once.
+  if (typeof setTimeout === 'function') {
+    const todo = ['p', 'r', 'b', 'q', 'k', 'n'];
+    const warm = () => { const t = todo.shift(); if (!t) return; try { getModel(t); } catch (e) { console.error(e); } setTimeout(warm, 0); };
+    setTimeout(warm, 0);
+  }
 
   // --- layout -----------------------------------------------------------------
 
@@ -188,8 +197,9 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
     const type = a.showType || a.type;
     const xs = [], ys = [], codes = [], shades = [];
     const x0 = a.vx, y0 = a.vy - a.vlift, sx = a.sx, sy = a.sy;
+    const map = SHADE[a.color];
     sprites.forEachCell(type, sprites.index(type, a.yaw), (cx, cy, code, shade) => {
-      xs.push(x0 + cx * sx); ys.push(y0 + cy * sy); codes.push(code); shades.push(shade);
+      xs.push(x0 + cx * sx); ys.push(y0 + cy * sy); codes.push(code); shades.push(map[shade]);
     });
     return { n: xs.length, x: xs, y: ys, code: codes, shade: shades };
   }
@@ -219,7 +229,7 @@ export function createPieces({ bus, world, watchdog = true } = {}) {
       const x0 = a.vx, y0 = a.vy - a.vlift;
       const f = reduced ? frac * 0.4 : frac;
       sprites.forEachCell(type, sprites.index(type, a.yaw), (cx, cy, code, shade) => {
-        if (fx.rnd() < f) fx.ghost(x0 + cx, y0 + cy, code, a.color, Math.min(5, shade + 1), 0.2 + fx.rnd() * 0.12, 0.6);
+        if (fx.rnd() < f) fx.ghost(x0 + cx, y0 + cy, code, a.color, Math.min(5, SHADE[a.color][shade] + 1), 0.2 + fx.rnd() * 0.12, 0.6);
       });
     },
     shatter(v, o) {
