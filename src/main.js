@@ -223,7 +223,11 @@ async function aiTurn(extraDelay = 0) {
   try {
     if (extraDelay) await wait(extraDelay);
     if (my !== gen) return;
-    move = await ai.requestMove(view.game.fen(), demo ? 1 : view.config.level);
+    // Hand over the move history too, so the search can see repetitions.
+    move = await ai.requestMove(view.game.fen(), demo ? 1 : view.config.level, {
+      startFen: view.game._startFen,
+      moves: view.game.history(),
+    });
   } catch (err) {
     if (my === gen) console.warn('[ai]', err);
   }
