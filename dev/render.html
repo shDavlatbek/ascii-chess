@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ASCII Chess — render harness</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14141c; overflow: hidden; font: 11px/1.3 "JetBrains Mono", Menlo, Consolas, monospace; color: #8a88b4; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  #panel { position: fixed; left: 6px; top: 6px; width: 190px; max-height: calc(100vh - 12px); overflow: auto; background: rgba(13,13,19,.82); border: 1px solid #35355a; padding: 6px; }
+  #panel.hidden { display: none; }
+  #panel h4 { margin: 6px 0 3px; font-size: 10px; color: #6b6aa8; letter-spacing: .08em; }
+  #panel button { font: inherit; color: #e9e6f7; background: #25253e; border: 1px solid #4d4d80; margin: 1px; padding: 2px 5px; cursor: pointer; }
+  #panel button:hover { background: #35355a; }
+  #stats { position: fixed; right: 8px; top: 6px; text-align: right; white-space: pre; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="panel"></div>
+<div id="stats"></div>
+<script type="module" src="./render-harness.js"></script>
+</body>
+</html>
