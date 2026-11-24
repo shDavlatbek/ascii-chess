@@ -1,0 +1,11 @@
+{
+  "name": "ascii-chess",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Animated ASCII chess — every pixel is a glyph.",
+  "scripts": {
+    "start": "node tools/serve.mjs 8080",
+    "test": "node --test tests/"
+  }
+}
