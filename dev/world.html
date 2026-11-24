@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ASCII Chess — world harness</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14141c; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; cursor: crosshair; }
+  #help {
+    position: fixed; left: 10px; bottom: 10px; margin: 0; padding: 8px 10px;
+    font: 11px/1.45 "JetBrains Mono", Menlo, Consolas, monospace; color: #b9b6dc;
+    background: rgba(13, 13, 19, 0.78); border: 1px solid #35355a; border-radius: 4px;
+    white-space: pre; pointer-events: none; max-width: calc(100vw - 40px); overflow: hidden;
+  }
+  #help b { color: #f2b56b; font-weight: 700; }
+  #bar { position: fixed; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px; max-width: 60vw; justify-content: flex-end; }
+  #bar button {
+    font: 11px "JetBrains Mono", Menlo, Consolas, monospace; color: #e9e6f7; background: #25253e;
+    border: 1px solid #4d4d80; border-radius: 3px; padding: 4px 7px; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<pre id="help"></pre>
+<div id="bar"></div>
+<script type="module" src="./world-harness.js"></script>
+</body>
+</html>
