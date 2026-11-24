@@ -151,7 +151,7 @@ export function createScenery(field) {
       if (thin) glyph[k] = u < 0.6 ? K('|') : u < 0.85 ? K(':') : K('!');
       else glyph[k] = u < 0.46 ? K('t') : u < 0.6 ? K('!') : u < 0.72 ? K('|') : u < 0.82 ? K(';') : u < 0.9 ? K(':') : K('*');
       tint[k] = glyph[k] === 42 ? 1 : 0;                  // blossoms are brighter
-      dim[k] = 1 - 0.5 * panelAt(x, k * step);
+      dim[k] = 1 - 0.3 * panelAt(x, k * step);
     }
     if (!thin && len > 4) { glyph[len - 1] = K('*'); tint[len - 1] = fg ? 1 : 2; }   // a bud at the tip
     return { x, len, glyph, tint, dim, ph: R() * 40, amp: (0.5 + R()) * step * (fg ? 0.9 : 0.55), rate: 0.35 + 0.4 * R(), thin };
@@ -160,7 +160,7 @@ export function createScenery(field) {
   function generateStrands() {
     strands = []; fgStrands = [];
     const { W, H, sq, cw } = L, b = L.board;
-    smallPx = Math.max(8, Math.round(L.fontPx * 0.58));
+    smallPx = Math.max(8, Math.round(L.fontPx * 0.62));
     smallStep = smallPx * 1.08;
     midPx = Math.max(9, Math.round(L.fontPx * 0.74));
     const count = clamp(Math.round(W / (sq * 1.45)), 5, 15);
@@ -192,7 +192,7 @@ export function createScenery(field) {
       const f = k / s.len;
       const sway = Math.sin(t * 0.55 + s.ph + k * 0.24) * s.amp * f * Math.sqrt(f);
       const d = Math.abs(k - pulseAt);
-      let a = (0.72 - 0.34 * f) * s.dim[k] * gain;
+      let a = (0.95 - 0.4 * f) * s.dim[k] * gain;
       if (d < 2.5) a += (1 - d / 2.5) * 0.4 * s.dim[k];
       if (a < 0.03) continue;
       ctx.globalAlpha = a > 1 ? 1 : a;

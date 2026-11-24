@@ -27,8 +27,11 @@ const LIGHT = codes(GLYPHS.lightSq);
 // Light squares have to out-shine the dark ones even though their family is the lighter-inked
 // one, so the heavier members of the family ('+', '~') come up more often than ':' and ';'.
 const LIGHT_W = (() => {
-  const heavy = LIGHT.filter((g) => g === 43 || g === 126);
-  return heavy.length ? LIGHT.concat(heavy, heavy.filter((g) => g === 43)) : LIGHT;
+  const heavy = LIGHT.filter((g) => g === 43 || g === 126), thin = LIGHT.filter((g) => g !== 43 && g !== 126);
+  if (!heavy.length || !thin.length) return LIGHT;
+  const out = [];
+  for (let k = 0, h = 0, t = 0; k < 14; k++) out.push(k % 4 === 3 ? thin[t++ % thin.length] : heavy[h++ % heavy.length]);
+  return out;       // thin glyphs are spaced out so they never pool into a dim patch
 })();
 const DARK = codes(GLYPHS.darkSq);
 const OUTSIDE = codes(GLYPHS.outside);
@@ -375,8 +378,9 @@ export function createField() {
       const idx = b + j * cols + i;
       const rim = isPerim(i, j);
       const breathe = 0.9 + 0.1 * Math.sin(t * 1.3 + rnd[idx] * TAU);
-      const k = heat * (rim ? (isTo ? 0.92 : 0.8) : (isTo ? 0.62 : 0.5)) * breathe;
-      set(idx, C.LAST, k, Math.min(1, al[idx] + 0.14 * heat), 0);
+      const k = heat * (rim ? (isTo ? 0.95 : 0.85) : (isTo ? 0.7 : 0.55)) * breathe;
+      // dark squares are lifted so the trace reads equally on both tints
+      set(idx, C.LAST, k, Math.min(1, Math.max(al[idx], 0.62) + 0.3 * heat), 0);
     }
   }
 
@@ -443,7 +447,7 @@ export function createField() {
   function hlCheck(sq, t, reduced) {
     const b = block(sq); if (b < 0) return;
     const ctr = L.squareCenter(sq);
-    const R = L.sq * 2.9, lambda = L.sq * 1.2, hz = reduced ? 0.35 : 1.15;
+    const R = L.sq * 3.1, lambda = L.sq * 1.3, hz = reduced ? 0.35 : 1.1;
     const c0 = Math.max(0, Math.floor((ctr.x - R - ox) / cw)), c1 = Math.min(cols - 1, Math.floor((ctr.x + R - ox) / cw));
     const r0 = Math.max(0, Math.floor((ctr.y - R - oy) / ch)), r1 = Math.min(rows - 1, Math.floor((ctr.y + R - oy) / ch));
     for (let r = r0; r <= r1; r++) {
@@ -455,13 +459,13 @@ export function createField() {
         const d = Math.hypot(xx, yy);
         if (d > R) continue;
         let w = 0.5 + 0.5 * Math.cos(TAU * (d / lambda - t * hz));
-        w = w * w * w;
-        const fall = (1 - d / R) ** 1.25;
-        const k = (reduced ? 0.5 : 0.85) * w * fall;
+        w = w * w;
+        const fall = (1 - d / R) ** 1.1;
+        const k = (reduced ? 0.5 : 0.95) * w * fall;
         if (k < 0.04) continue;
         touch(idx);
         if (k > fxK[idx]) { fxK[idx] = k; fxC[idx] = C.DANGER; }
-        fxAdd[idx] += 0.22 * w * fall;
+        fxAdd[idx] += 0.4 * w * fall;
       }
     }
     const beat = 0.5 + 0.5 * Math.sin(t * (reduced ? 2.2 : 6.5));
@@ -578,7 +582,7 @@ export function createField() {
     if (lm && lm.from && lm.to) {
       const key = lm.from + lm.to;
       if (key !== last.key) { last.key = key; last.t = t; }
-      const heat = 0.42 + 0.58 * Math.exp(-(t - last.t) / 3.5);
+      const heat = 0.58 + 0.42 * Math.exp(-(t - last.t) / 3.5);
       hlLast(lm.from, heat * 0.9, false, t);
       hlLast(lm.to, heat, true, t);
     } else {
